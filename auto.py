@@ -1,4 +1,12 @@
+"""
+Auto-download of ancillary files.
 
+It allows Operations to specify a serious of source locations (http/ftp/rss URLs)
+and destination locations to download to.
+
+This is intended to replace Operations maintenance of many diverse and
+complicated scripts with a single, central configuration file.
+"""
 from . import http, DataSource, FetchReporter
 import logging
 import sys
@@ -8,6 +16,7 @@ _log = logging.getLogger(__name__)
 
 class _PrintReporter(FetchReporter):
     def file_complete(self, uri, name, path):
+
         _log.info('Completed %r: %r -> %r', name, uri, path)
 
     def file_error(self, uri, message):
@@ -16,6 +25,7 @@ class _PrintReporter(FetchReporter):
 
 def execute_modules(modules):
     """
+    Execute the given modules once.
 
     :type modules: list of DataSource
     :return:
@@ -27,11 +37,17 @@ def execute_modules(modules):
         module.trigger(reporter)
 
 
-def _main():
-    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s", stream=sys.stderr, level=logging.WARNING)
+def _run():
+    """
+    Fetch each configured ancillary file.
+    """
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s",
+                        stream=sys.stderr, level=logging.WARNING)
     _log.setLevel(logging.DEBUG)
     logging.getLogger('onreceipt').setLevel(logging.DEBUG)
 
+    # Hard-code the modules for now.
+    # TODO: Load dynamically.
     modules = [
         http.HttpSource(
             [
@@ -45,4 +61,4 @@ def _main():
 
 
 if __name__ == '__main__':
-    _main()
+    _run()

@@ -1,5 +1,15 @@
+"""
+A package for automatically fetching files (eg. Ancillary).
+"""
+
+
 class DataSource(object):
     def __init__(self):
+        """
+        A base class for data downloaders.
+
+        Overridden by specific subclasses: HTTP, FTP, RSS and others.
+        """
         super(DataSource, self).__init__()
 
     def trigger(self, reporter):
@@ -17,9 +27,17 @@ class DataSource(object):
 
 class FetchReporter(object):
     def __init__(self):
+        """
+        A series of callbacks to report on the status of downloads.
+        """
         super(FetchReporter, self).__init__()
 
     def file_error(self, uri, message):
+        """
+        Call on failure of a file.
+        :type uri: str
+        :type message: str
+        """
         pass
 
     def file_complete(self, uri, name, path):
@@ -28,6 +46,5 @@ class FetchReporter(object):
         :type uri: str
         :type name: str
         :type path: str
-        :return:
         """
         pass

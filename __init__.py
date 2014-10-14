@@ -4,11 +4,15 @@ A package for automatically fetching files (eg. Ancillary).
 
 
 class DataSource(object):
+    """
+    A base class for data downloaders.
+
+    Overridden by specific subclasses: HTTP, FTP, RSS and others.
+    """
+
     def __init__(self):
         """
-        A base class for data downloaders.
-
-        Overridden by specific subclasses: HTTP, FTP, RSS and others.
+        Base class constructor.
         """
         super(DataSource, self).__init__()
 
@@ -26,9 +30,13 @@ class DataSource(object):
 
 
 class FetchReporter(object):
+    """
+    A series of callbacks to report on the status of downloads.
+    """
+
     def __init__(self):
         """
-        A series of callbacks to report on the status of downloads.
+        Base class constructor.
         """
         super(FetchReporter, self).__init__()
 

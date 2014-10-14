@@ -15,11 +15,22 @@ _log = logging.getLogger(__name__)
 
 
 class _PrintReporter(FetchReporter):
+    """
+    Send events to the log.
+    """
     def file_complete(self, uri, name, path):
-
+        """
+        :type uri: str
+        :type name: str
+        :type path: str
+        """
         _log.info('Completed %r: %r -> %r', name, uri, path)
 
     def file_error(self, uri, message):
+        """
+        :type uri: str
+        :type message: str
+        """
         _log.info('Error (%r): %r)', uri, message)
 
 
@@ -33,7 +44,8 @@ def execute_modules(modules):
     reporter = _PrintReporter()
     # TODO: Filter based on module period (daily, hourly etc).
     for module in modules:
-        _log.info('Running module %r', module)
+        _log.info('Running %s: %r', DataSource.__name__, module)
+
         module.trigger(reporter)
 
 

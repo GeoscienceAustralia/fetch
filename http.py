@@ -62,13 +62,14 @@ def fetch_file(target_dir, name, reporter, url):
 
 
 class HttpSource(DataSource):
+    """
+    Source static HTTP URLs.
+
+    This is useful for unchanging URLs that need to be
+    repeatedly updated.
+    """
     def __init__(self, source_urls, target_dir):
         """
-        Get static HTTP urls.
-
-        This is useful for unchanging URLs that need to be
-        repeatedly updated.
-
         :type source_urls: list of str
         :type target_dir: str
         :return:
@@ -90,12 +91,13 @@ class HttpSource(DataSource):
 
 
 class RssSource(DataSource):
+    """
+    Fetch any files from the given RSS URL.
+
+    The title of feed entries is assumed to be the filename.
+    """
     def __init__(self, rss_url, target_dir):
         """
-        Fetch any files from the given RSS URL.
-
-        The title of feed entries is assumed to be the filename.
-
         :type rss_url: str
         :type target_dir: str
         :return:

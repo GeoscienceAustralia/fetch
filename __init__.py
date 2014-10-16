@@ -1,6 +1,10 @@
 """
 A package for automatically fetching files (eg. Ancillary).
 """
+import re
+import logging
+
+_log = logging.getLogger(__name__)
 
 
 class DataSource(object):
@@ -56,3 +60,59 @@ class FetchReporter(object):
         :type path: str
         """
         pass
+
+
+class FilenameProxy(object):
+    """
+    A base class for objects that read filenames and alter destination paths.
+
+    Eg. Reading the date from a source filename so that output can be stored in year/month folders.
+    """
+
+    def __init__(self):
+        super(FilenameProxy, self).__init__()
+        pass
+
+    def transform_destination_path(self, path, source_filename=None):
+        """
+        Override this method to modify output path of a file.
+        """
+        return path
+
+
+class RegexpFilenameProxy(FilenameProxy):
+    """
+    To extract fields from a filename with a regexp, and
+    replace similar fields in destionation paths.
+    """
+
+    def __init__(self, regexp):
+        """
+        :type regexp: str
+        """
+        super(RegexpFilenameProxy, self).__init__()
+
+        #: :type: re.Regexp
+        self.e = re.compile(regexp)
+
+    def transform_destination_path(self, path, source_filename=None):
+        """
+
+        :param path:
+        :param source_filename:
+
+        >>> RegexpFilenameProxy('LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        '/tmp/out/2003'
+        >>> RegexpFilenameProxy('LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        '/tmp/out/2003'
+        """
+        m = self.e.match(source_filename)
+
+        if not m:
+            _log.info('No regexp match for %r', path)
+            return path
+
+        groups = m.groupdict()
+
+        return path.format(**groups)
+

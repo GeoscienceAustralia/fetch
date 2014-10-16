@@ -2,13 +2,15 @@
 HTTP-based download of files.
 """
 
-from . import DataSource
 import os
 import tempfile
 import requests
 import logging
 from contextlib import closing
 import feedparser
+
+from . import DataSource, FilenameProxy
+
 
 _log = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class HttpSource(DataSource):
     This is useful for unchanging URLs that need to be
     repeatedly updated.
     """
+
     def __init__(self, source_urls, target_dir):
         """
         :type source_urls: list of str
@@ -97,16 +100,20 @@ class RssSource(DataSource):
 
     The title of feed entries is assumed to be the filename.
     """
-    def __init__(self, rss_url, target_dir):
+
+    def __init__(self, rss_url, target_dir, filename_proxy=None):
         """
         :type rss_url: str
         :type target_dir: str
+        :type filename_proxy: FilenameProxy
         :return:
         """
         super(RssSource, self).__init__()
 
         self.rss_url = rss_url
         self.target_dir = target_dir
+
+        self.filename_proxy = filename_proxy
 
     def trigger(self, reporter):
         """
@@ -130,6 +137,12 @@ class RssSource(DataSource):
 
             target_location = os.path.join(self.target_dir, name)
 
+            if self.filename_proxy:
+                target_location = self.filename_proxy.transform_destination_path(
+                    target_location,
+                    source_filename=name
+                )
+
             if os.path.exists(target_location):
                 _log.debug('Exists, skipping %r', target_location)
                 continue
@@ -138,11 +151,11 @@ class RssSource(DataSource):
             fetch_file(target_location, name, reporter, url)
 
 
-        # For each entry,
-        #     - does it match pattern?
-        #     - do we already have it?
+            # For each entry,
+            # - does it match pattern?
+            #     - do we already have it?
 
-        # Download entry.
-        # Move into place.
+            # Download entry.
+            # Move into place.
 
 

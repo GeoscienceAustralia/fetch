@@ -7,7 +7,7 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
-from . import http, DataSource, FetchReporter
+from . import http, DataSource, FetchReporter, RegexpFilenameProxy
 import logging
 import sys
 
@@ -49,6 +49,33 @@ def execute_modules(modules):
         module.trigger(reporter)
 
 
+def load_modules():
+    """
+    Load the configuration of things to fetch.
+
+    In the future this will come from an external text/YAML/JSON file.
+    """
+    # Hard-code the modules for now.
+    # TODO: Load dynamically.
+    return [
+        http.HttpSource(
+            [
+                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
+                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
+            ],
+            '/tmp'
+        ),
+        http.RssSource(
+            'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
+            '/tmp/ls7-cpf/{year}',
+            filename_proxy=RegexpFilenameProxy(
+                # Extract year and juldate from Filename. Eg:
+                # 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
+                '(?[A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
+            )
+        )
+    ]
+
 def _run():
     """
     Fetch each configured ancillary file.
@@ -58,17 +85,7 @@ def _run():
     _log.setLevel(logging.DEBUG)
     logging.getLogger('onreceipt').setLevel(logging.DEBUG)
 
-    # Hard-code the modules for now.
-    # TODO: Load dynamically.
-    modules = [
-        http.HttpSource(
-            [
-                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
-                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
-            ],
-            '/tmp'
-        )
-    ]
+    modules = load_modules()
     execute_modules(modules)
 
 

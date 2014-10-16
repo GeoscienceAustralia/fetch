@@ -8,6 +8,7 @@ import tempfile
 import requests
 import logging
 from contextlib import closing
+import feedparser
 
 _log = logging.getLogger(__name__)
 
@@ -114,7 +115,28 @@ class RssSource(DataSource):
         super(RssSource, self).trigger(reporter)
 
         # Fetch feed.
-        requests.get(self.rss_url)
+        res = requests.get(self.rss_url)
+
+        if res.status_code != 200:
+            _log.debug('Received text %r', res.text)
+            reporter.file_error(self.rss_url, "Status code %r" % res.status_code)
+            return
+
+        feed = feedparser.parse(res.text)
+
+        for entry in feed.entries:
+            name = entry.title
+            url = entry.link
+
+            target_location = os.path.join(self.target_dir, name)
+
+            if os.path.exists(target_location):
+                _log.debug('Exists, skipping %r', target_location)
+                continue
+
+            # TODO: Destination folder calculated with date pattern?
+            fetch_file(target_location, name, reporter, url)
+
 
         # For each entry,
         #     - does it match pattern?

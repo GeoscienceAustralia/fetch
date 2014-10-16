@@ -9,7 +9,7 @@ import logging
 from contextlib import closing
 import feedparser
 
-from . import DataSource, FilenameProxy
+from . import DataSource
 
 
 _log = logging.getLogger(__name__)

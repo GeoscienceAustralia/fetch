@@ -71,7 +71,6 @@ class FilenameProxy(object):
 
     def __init__(self):
         super(FilenameProxy, self).__init__()
-        pass
 
     def transform_destination_path(self, path, source_filename=None):
         """
@@ -93,7 +92,7 @@ class RegexpFilenameProxy(FilenameProxy):
         super(RegexpFilenameProxy, self).__init__()
 
         #: :type: re.Regexp
-        self.e = re.compile(regexp)
+        self.regexp = re.compile(regexp)
 
     def transform_destination_path(self, path, source_filename=None):
         """
@@ -101,12 +100,12 @@ class RegexpFilenameProxy(FilenameProxy):
         :param path:
         :param source_filename:
 
-        >>> RegexpFilenameProxy('LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        >>> RegexpFilenameProxy(r'LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
         '/tmp/out/2003'
-        >>> RegexpFilenameProxy('LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        >>> RegexpFilenameProxy(r'LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
         '/tmp/out/2003'
         """
-        m = self.e.match(source_filename)
+        m = self.regexp.match(source_filename)
 
         if not m:
             _log.info('No regexp match for %r', path)

@@ -100,9 +100,9 @@ class RegexpFilenameProxy(FilenameProxy):
         :param path:
         :param source_filename:
 
-        >>> RegexpFilenameProxy(r'LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        >>> RegexpFilenameProxy(r'LS8_(?P<year>\\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
         '/tmp/out/2003'
-        >>> RegexpFilenameProxy(r'LS8_(?P<year>\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
+        >>> RegexpFilenameProxy(r'LS8_(?P<year>\\d{4})').transform_destination_path('LS8_2003', '/tmp/out/{year}')
         '/tmp/out/2003'
         """
         m = self.regexp.match(source_filename)

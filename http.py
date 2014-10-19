@@ -8,6 +8,8 @@ import requests
 import logging
 from contextlib import closing
 import feedparser
+from lxml import etree
+from urlparse import urljoin
 
 from . import DataSource
 
@@ -94,6 +96,50 @@ class HttpSource(DataSource):
             fetch_file(self.target_dir, name, reporter, url)
 
 
+class HttpListingSource(DataSource):
+    def __init__(self, listing_url, file_pattern, target_dir, filename_proxy=None):
+        super(HttpListingSource, self).__init__()
+
+        self.listing_url = listing_url
+        self.file_pattern = file_pattern
+        self.target_dir = target_dir
+        self.filename_proxy = filename_proxy
+
+    def trigger(self, reporter):
+        """
+        Download the given listing page, and any links that match the name pattern.
+        """
+        res = requests.get(self.listing_url)
+        if res.status_code != 200:
+            _log.debug('Received text %r', res.text)
+            reporter.file_error(self.listing_url, "Status code %r" % res.status_code)
+            return
+
+        page = etree.fromstring(res.text, parser=etree.HTMLParser()), res.url
+        url = res.url
+
+        anchors = page.xpath('//a')
+        name_paths = [(anchor.text, urljoin(url, anchor.attrib['href'])) for anchor in anchors]
+
+        for name, target_url in name_paths:
+
+            # TODO: If name matches pattern.
+
+            target_location = os.path.join(self.target_dir, name)
+
+            if self.filename_proxy:
+                target_location = self.filename_proxy.transform_destination_path(
+                    target_location,
+                    source_filename=name
+                )
+
+            if os.path.exists(target_location):
+                _log.debug('Exists, skipping %r', target_location)
+                continue
+
+            fetch_file(target_location, name, reporter, target_url)
+
+
 class RssSource(DataSource):
     """
     Fetch any files from the given RSS URL.
@@ -154,6 +200,7 @@ class RssSource(DataSource):
             # For each entry,
             # - does it match pattern?
             #     - do we already have it?
+
 
             # Download entry.
             # Move into place.

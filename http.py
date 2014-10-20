@@ -29,7 +29,7 @@ def filename_from_url(url):
     return url.split('/')[-1]
 
 
-def fetch_file(target_dir, name, reporter, url):
+def fetch_file(target_dir, name, reporter, url, override_existing=False):
     """
     Fetch the given URL to the target folder.
 
@@ -38,6 +38,16 @@ def fetch_file(target_dir, name, reporter, url):
     :type reporter: FetchReporter
     :type url: str
     """
+
+    if not os.path.exists(target_dir):
+        os.mkdir(target_dir)
+
+    target_path = os.path.join(target_dir, name)
+
+    if os.path.exists(target_path) and not override_existing:
+        _log.info('Path exists (%r). Skipping', target_path)
+        return
+
     with closing(requests.get(url, stream=True)) as res:
         if res.status_code != 200:
             _log.debug('Received text %r', res.text)
@@ -60,7 +70,6 @@ def fetch_file(target_dir, name, reporter, url):
         return
 
     # Move to destination
-    target_path = os.path.join(target_dir, name)
     os.rename(t, target_path)
     # Report as complete.
     reporter.file_complete(url, name, target_path)
@@ -93,7 +102,7 @@ class HttpSource(DataSource):
         """
         for url in self.source_urls:
             name = filename_from_url(url)
-            fetch_file(self.target_dir, name, reporter, url)
+            fetch_file(self.target_dir, name, reporter, url, override_existing=True)
 
 
 class HttpListingSource(DataSource):
@@ -130,17 +139,13 @@ class HttpListingSource(DataSource):
 
             # TODO: If name matches pattern.
 
-            target_location = os.path.join(self.target_dir, name)
+            target_location = self.target_dir
 
             if self.filename_proxy:
                 target_location = self.filename_proxy.transform_destination_path(
                     target_location,
                     source_filename=name
                 )
-
-            if os.path.exists(target_location):
-                _log.debug('Exists, skipping %r', target_location)
-                continue
 
             fetch_file(target_location, name, reporter, target_url)
 
@@ -170,8 +175,6 @@ class RssSource(DataSource):
         """
         Download RSS feed and fetch missing files.
         """
-        super(RssSource, self).trigger(reporter)
-
         # Fetch feed.
         res = requests.get(self.rss_url)
 
@@ -186,7 +189,7 @@ class RssSource(DataSource):
             name = entry.title
             url = entry.link
 
-            target_location = os.path.join(self.target_dir, name)
+            target_location = self.target_dir
 
             if self.filename_proxy:
                 target_location = self.filename_proxy.transform_destination_path(
@@ -194,20 +197,9 @@ class RssSource(DataSource):
                     source_filename=name
                 )
 
-            if os.path.exists(target_location):
-                _log.debug('Exists, skipping %r', target_location)
-                continue
-
             # TODO: Destination folder calculated with date pattern?
             fetch_file(target_location, name, reporter, url)
 
 
-            # For each entry,
-            # - does it match pattern?
-            #     - do we already have it?
-
-
-            # Download entry.
-            # Move into place.
 
 

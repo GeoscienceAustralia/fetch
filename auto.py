@@ -71,7 +71,7 @@ def load_modules():
             filename_proxy=RegexpFilenameProxy(
                 # Extract year and juldate from Filename. Eg:
                 # 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
-                '(?[A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
+                '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
             )
         )
     ]

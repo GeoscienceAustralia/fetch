@@ -97,6 +97,11 @@ class HttpSource(DataSource):
 
 
 class HttpListingSource(DataSource):
+    """
+    Fetch files from a HTTP listing page.
+
+    A pattern can be supplied to limit files by filename.
+    """
     def __init__(self, listing_url, file_pattern, target_dir, filename_proxy=None):
         super(HttpListingSource, self).__init__()
 
@@ -115,7 +120,7 @@ class HttpListingSource(DataSource):
             reporter.file_error(self.listing_url, "Status code %r" % res.status_code)
             return
 
-        page = etree.fromstring(res.text, parser=etree.HTMLParser()), res.url
+        page = etree.fromstring(res.text, parser=etree.HTMLParser())
         url = res.url
 
         anchors = page.xpath('//a')

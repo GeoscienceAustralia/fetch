@@ -161,11 +161,11 @@ class RssSource(DataSource):
     The title of feed entries is assumed to be the filename.
     """
 
-    def __init__(self, rss_url, target_dir, filename_proxy=None):
+    def __init__(self, rss_url, target_dir, filename_transform=None):
         """
         :type rss_url: str
         :type target_dir: str
-        :type filename_proxy: FilenameProxy
+        :type filename_transform: FilenameTransform
         :return:
         """
         super(RssSource, self).__init__()
@@ -173,7 +173,7 @@ class RssSource(DataSource):
         self.rss_url = rss_url
         self.target_dir = target_dir
 
-        self.filename_proxy = filename_proxy
+        self.filename_transform = filename_transform
 
     def trigger(self, reporter):
         """
@@ -195,8 +195,8 @@ class RssSource(DataSource):
 
             target_location = self.target_dir
 
-            if self.filename_proxy:
-                target_location = self.filename_proxy.transform_destination_path(
+            if self.filename_transform:
+                target_location = self.filename_transform.transform_destination_path(
                     target_location,
                     source_filename=name
                 )

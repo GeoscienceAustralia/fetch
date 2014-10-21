@@ -62,7 +62,7 @@ class FetchReporter(object):
         pass
 
 
-class FilenameProxy(object):
+class FilenameTransform(object):
     """
     A base class for objects that read filenames and alter destination paths.
 
@@ -70,7 +70,7 @@ class FilenameProxy(object):
     """
 
     def __init__(self):
-        super(FilenameProxy, self).__init__()
+        super(FilenameTransform, self).__init__()
 
     def transform_destination_path(self, path, source_filename=None):
         """
@@ -82,17 +82,18 @@ class FilenameProxy(object):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
 
 
-class RegexpFilenameProxy(FilenameProxy):
+class RegexpFilenameTransform(FilenameTransform):
     """
-    To extract fields from a filename with a regexp, and
-    replace similar fields in destionation paths.
+    Extract fields from a filename using regexp groups.
+
+    Replace patterns matching the group name in the destination path.
     """
 
     def __init__(self, regexp):
         """
         :type regexp: str
         """
-        super(RegexpFilenameProxy, self).__init__()
+        super(RegexpFilenameTransform, self).__init__()
 
         #: :type: re.Regexp
         self.regexp = re.compile(regexp)
@@ -103,9 +104,9 @@ class RegexpFilenameProxy(FilenameProxy):
         :param path:
         :param source_filename:
 
-        >>> RegexpFilenameProxy(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out/{year}', 'LS8_2003')
+        >>> RegexpFilenameTransform(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out/{year}', 'LS8_2003')
         '/tmp/out/2003'
-        >>> RegexpFilenameProxy(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out', 'LS8_2003')
+        >>> RegexpFilenameTransform(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out', 'LS8_2003')
         '/tmp/out'
         """
         m = self.regexp.match(source_filename)

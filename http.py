@@ -41,6 +41,7 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False):
     """
 
     if not os.path.exists(target_dir):
+        _log.info('Creating dir %r', target_dir)
         os.makedirs(target_dir)
 
     target_path = os.path.join(target_dir, name)

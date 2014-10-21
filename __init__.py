@@ -78,6 +78,9 @@ class FilenameProxy(object):
         """
         return path
 
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.__dict__)
+
 
 class RegexpFilenameProxy(FilenameProxy):
     """
@@ -114,4 +117,9 @@ class RegexpFilenameProxy(FilenameProxy):
         groups = m.groupdict()
 
         return path.format(**groups)
+
+    def __repr__(self):
+        return '%s(regexp=%r)' % (self.__class__.__name__, self.regexp.pattern)
+
+
 

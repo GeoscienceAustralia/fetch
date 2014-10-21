@@ -64,25 +64,31 @@ class FetchReporter(object):
 
 class FilenameTransform(object):
     """
-    A base class for objects that read filenames and alter destination paths.
+    A base class for objects that modify output filenames and directories.
 
-    Eg. Reading the date from a source filename so that output can be stored in year/month folders.
+    Primarily useful for situations such as putting files in folders by date.
     """
 
     def __init__(self):
         super(FilenameTransform, self).__init__()
 
-    def transform_destination_path(self, path, source_filename=None):
+    def transform_filename(self, source_filename):
         """
-        Override this method to modify output path of a file.
+        Modify output filename
         """
-        return path
+        return source_filename
+
+    def transform_output_path(self, output_path, source_filename):
+        """
+        Modify output folder path
+        """
+        return output_path
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
 
 
-class RegexpFilenameTransform(FilenameTransform):
+class RegexpOutputPathTransform(FilenameTransform):
     """
     Extract fields from a filename using regexp groups.
 
@@ -93,20 +99,20 @@ class RegexpFilenameTransform(FilenameTransform):
         """
         :type regexp: str
         """
-        super(RegexpFilenameTransform, self).__init__()
+        super(RegexpOutputPathTransform, self).__init__()
 
         #: :type: re.Regexp
         self.regexp = re.compile(regexp)
 
-    def transform_destination_path(self, path, source_filename=None):
+    def transform_output_path(self, path, source_filename=None):
         """
 
         :param path:
         :param source_filename:
 
-        >>> RegexpFilenameTransform(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out/{year}', 'LS8_2003')
+        >>> RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})').transform_output_path('/tmp/out/{year}', 'LS8_2003')
         '/tmp/out/2003'
-        >>> RegexpFilenameTransform(r'LS8_(?P<year>\\d{4})').transform_destination_path('/tmp/out', 'LS8_2003')
+        >>> RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})').transform_output_path('/tmp/out', 'LS8_2003')
         '/tmp/out'
         """
         m = self.regexp.match(source_filename)

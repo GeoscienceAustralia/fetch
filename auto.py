@@ -7,7 +7,7 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
-from . import http, DataSource, FetchReporter, RegexpFilenameTransform
+from . import http, DataSource, FetchReporter, RegexpOutputPathTransform
 import logging
 import sys
 
@@ -73,7 +73,7 @@ def load_modules():
         http.RssSource(
             'http://landsat.usgs.gov/bpf.rss',
             '/tmp/anc/ls8-bpf/{year}/{month}',
-            filename_transform=RegexpFilenameTransform(
+            filename_transform=RegexpOutputPathTransform(
                 # Extract year and month
                 'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
             )
@@ -81,7 +81,7 @@ def load_modules():
         http.RssSource(
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
             '/tmp/anc/ls8-tle/{year}',
-            filename_transform=RegexpFilenameTransform(
+            filename_transform=RegexpOutputPathTransform(
                 # Extract year and juldate from Filename. Eg:
                 # 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
                 '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'

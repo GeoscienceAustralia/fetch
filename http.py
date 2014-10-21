@@ -113,14 +113,14 @@ class HttpListingSource(DataSource):
 
     A pattern can be supplied to limit files by filename.
     """
-    def __init__(self, listing_url, target_dir, filename_pattern='.*', filename_proxy=None):
+    def __init__(self, listing_url, target_dir, filename_pattern='.*', filename_transform=None):
         super(HttpListingSource, self).__init__()
 
         self.listing_url = listing_url
         #: :type: re.Regexp
         self.filename_pattern_re = re.compile(filename_pattern)
         self.target_dir = target_dir
-        self.filename_proxy = filename_proxy
+        self.filename_transform = filename_transform
 
     def trigger(self, reporter):
         """
@@ -138,20 +138,22 @@ class HttpListingSource(DataSource):
         anchors = page.xpath('//a')
         name_paths = [(anchor.text, urljoin(url, anchor.attrib['href'])) for anchor in anchors]
 
-        for name, target_url in name_paths:
+        for name, source_url in name_paths:
             if not self.filename_pattern_re.match(name):
                 _log.info('Filename (%r) doesn\'t match pattern, skipping.', name)
                 continue
 
             target_location = self.target_dir
+            target_name = name
 
-            if self.filename_proxy:
-                target_location = self.filename_proxy.transform_destination_path(
+            if self.filename_transform:
+                target_location = self.filename_transform.transform_output_path(
                     target_location,
                     source_filename=name
                 )
+                target_name = self.filename_transform.transform_filename(target_name)
 
-            fetch_file(target_location, name, reporter, target_url)
+            fetch_file(target_location, target_name, reporter, source_url)
 
 
 class RssSource(DataSource):
@@ -196,10 +198,11 @@ class RssSource(DataSource):
             target_location = self.target_dir
 
             if self.filename_transform:
-                target_location = self.filename_transform.transform_destination_path(
+                target_location = self.filename_transform.transform_output_path(
                     target_location,
                     source_filename=name
                 )
+                name = self.filename_transform.transform_filename(name)
 
             # TODO: Destination folder calculated with date pattern?
             fetch_file(target_location, name, reporter, url)

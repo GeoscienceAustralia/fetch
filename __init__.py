@@ -95,14 +95,23 @@ class RegexpOutputPathTransform(FilenameTransform):
     Replace patterns matching the group name in the destination path.
     """
 
-    def __init__(self, regexp):
+    def __init__(self, pattern):
         """
-        :type regexp: str
+        :type pattern: str
         """
         super(RegexpOutputPathTransform, self).__init__()
 
-        #: :type: re.Regexp
-        self.regexp = re.compile(regexp)
+        # Validate the pattern immediately on startup.
+
+        # We don't bother keeping the compiled version -- there's no perf. benefit, and
+        # serialisation is more complicated.
+        try:
+            re.compile(pattern)
+        except re.error:
+            _log.error('Invalid pattern %r', pattern)
+            raise
+
+        self.pattern = pattern
 
     def transform_output_path(self, path, source_filename=None):
         """
@@ -115,7 +124,7 @@ class RegexpOutputPathTransform(FilenameTransform):
         >>> RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})').transform_output_path('/tmp/out', 'LS8_2003')
         '/tmp/out'
         """
-        m = self.regexp.match(source_filename)
+        m = re.match(self.pattern, source_filename)
 
         if not m:
             _log.info('No regexp match for %r', path)
@@ -125,8 +134,6 @@ class RegexpOutputPathTransform(FilenameTransform):
 
         return path.format(**groups)
 
-    def __repr__(self):
-        return '%s(regexp=%r)' % (self.__class__.__name__, self.regexp.pattern)
 
 
 

@@ -30,7 +30,7 @@ def filename_from_url(url):
     return url.split('/')[-1]
 
 
-def fetch_file(target_dir, name, reporter, url, override_existing=False):
+def fetch_file(target_dir, name, reporter, url, override_existing=False, filename_transform=None):
     """
     Fetch the given URL to the target folder.
 
@@ -39,6 +39,13 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False):
     :type reporter: FetchReporter
     :type url: str
     """
+
+    if filename_transform:
+        target_dir = filename_transform.transform_output_path(
+            target_dir,
+            source_filename=name
+        )
+        name = filename_transform.transform_filename(name)
 
     if not os.path.exists(target_dir):
         _log.info('Creating dir %r', target_dir)
@@ -115,12 +122,12 @@ class HttpListingSource(DataSource):
 
     A pattern can be supplied to limit files by filename.
     """
-    def __init__(self, listing_url, target_dir, filename_pattern='.*', filename_transform=None):
+
+    def __init__(self, listing_url, target_dir, listing_name_filter='.*', filename_transform=None):
         super(HttpListingSource, self).__init__()
 
         self.listing_url = listing_url
-        #: :type: re.Regexp
-        self.filename_pattern_re = re.compile(filename_pattern)
+        self.listing_name_filter = listing_name_filter
         self.target_dir = target_dir
         self.filename_transform = filename_transform
 
@@ -138,24 +145,22 @@ class HttpListingSource(DataSource):
         url = res.url
 
         anchors = page.xpath('//a')
-        name_paths = [(anchor.text, urljoin(url, anchor.attrib['href'])) for anchor in anchors]
 
-        for name, source_url in name_paths:
-            if not self.filename_pattern_re.match(name):
+        for anchor in anchors:
+            name = anchor.text
+            source_url = urljoin(url, anchor.attrib['href'])
+
+            if not re.match(self.listing_name_filter, name):
                 _log.info('Filename (%r) doesn\'t match pattern, skipping.', name)
                 continue
 
-            target_location = self.target_dir
-            target_name = name
-
-            if self.filename_transform:
-                target_location = self.filename_transform.transform_output_path(
-                    target_location,
-                    source_filename=name
-                )
-                target_name = self.filename_transform.transform_filename(target_name)
-
-            fetch_file(target_location, target_name, reporter, source_url)
+            fetch_file(
+                self.target_dir,
+                name,
+                reporter,
+                source_url,
+                filename_transform=self.filename_transform
+            )
 
 
 class RssSource(DataSource):
@@ -197,18 +202,13 @@ class RssSource(DataSource):
             name = entry.title
             url = entry.link
 
-            target_location = self.target_dir
-
-            if self.filename_transform:
-                target_location = self.filename_transform.transform_output_path(
-                    target_location,
-                    source_filename=name
-                )
-                name = self.filename_transform.transform_filename(name)
-
-            # TODO: Destination folder calculated with date pattern?
-            fetch_file(target_location, name, reporter, url)
-            break
+            fetch_file(
+                self.target_dir,
+                name,
+                reporter,
+                url,
+                filename_transform=self.filename_transform
+            )
 
 
 

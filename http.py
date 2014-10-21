@@ -57,8 +57,10 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False):
             return
 
         t = tempfile.mktemp(
-            dir=target_dir
+            dir=target_dir,
+            prefix='.fetch-'
         )
+        # TODO: Cleanup tmp files on failure
 
         with open(t, 'wb') as f:
             for chunk in res.iter_content(4096):
@@ -206,7 +208,7 @@ class RssSource(DataSource):
 
             # TODO: Destination folder calculated with date pattern?
             fetch_file(target_location, name, reporter, url)
-
+            break
 
 
 

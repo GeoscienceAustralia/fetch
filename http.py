@@ -30,12 +30,12 @@ def filename_from_url(url):
     return url.split('/')[-1]
 
 
-def fetch_file(target_dir, name, reporter, url, override_existing=False, filename_transform=None):
+def _fetch_file(target_dir, target_name, reporter, url, override_existing=False, filename_transform=None):
     """
     Fetch the given URL to the target folder.
 
     :type target_dir: str
-    :type name: str
+    :type target_name: str
     :type reporter: FetchReporter
     :type url: str
     """
@@ -43,15 +43,15 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False, filenam
     if filename_transform:
         target_dir = filename_transform.transform_output_path(
             target_dir,
-            source_filename=name
+            source_filename=target_name
         )
-        name = filename_transform.transform_filename(name)
+        target_name = filename_transform.transform_filename(target_name)
 
     if not os.path.exists(target_dir):
         _log.info('Creating dir %r', target_dir)
         os.makedirs(target_dir)
 
-    target_path = os.path.join(target_dir, name)
+    target_path = os.path.join(target_dir, target_name)
 
     if os.path.exists(target_path) and not override_existing:
         _log.info('Path exists (%r). Skipping', target_path)
@@ -83,12 +83,12 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False, filenam
     # Move to destination
     os.rename(t, target_path)
     # Report as complete.
-    reporter.file_complete(url, name, target_path)
+    reporter.file_complete(url, target_name, target_path)
 
 
 class HttpSource(DataSource):
     """
-    Source static HTTP URLs.
+    Fetch static HTTP URLs.
 
     This is useful for unchanging URLs that need to be
     repeatedly updated.
@@ -113,7 +113,7 @@ class HttpSource(DataSource):
         """
         for url in self.source_urls:
             name = filename_from_url(url)
-            fetch_file(self.target_dir, name, reporter, url, override_existing=True)
+            _fetch_file(self.target_dir, name, reporter, url, override_existing=True)
 
 
 class HttpListingSource(DataSource):
@@ -154,7 +154,7 @@ class HttpListingSource(DataSource):
                 _log.info('Filename (%r) doesn\'t match pattern, skipping.', name)
                 continue
 
-            fetch_file(
+            _fetch_file(
                 self.target_dir,
                 name,
                 reporter,
@@ -202,7 +202,7 @@ class RssSource(DataSource):
             name = entry.title
             url = entry.link
 
-            fetch_file(
+            _fetch_file(
                 self.target_dir,
                 name,
                 reporter,

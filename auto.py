@@ -58,21 +58,42 @@ def load_modules():
     # Hard-code the modules for now.
     # TODO: Load dynamically.
     return [
-        http.HttpSource(
-            [
-                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
-                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
-            ],
-            '/tmp'
+
+        http.RssSource(
+            'https://landsat.usgs.gov/L5CPFRSS.rss',
+            '/tmp/anc/ls5-cpf'
+        ),
+        http.RssSource(
+            'http://landsat.usgs.gov/L7CPFRSS.rss',
+            '/tmp/anc/ls7-cpf'
+        ),
+        http.RssSource(
+            'http://landsat.usgs.gov/cpf.rss',
+            '/tmp/anc/ls8-cpf'
+        ),
+        http.RssSource(
+            'http://landsat.usgs.gov/bpf.rss',
+            '/tmp/anc/ls8-bpf/{year}/{month}',
+            filename_proxy=RegexpFilenameProxy(
+                # Extract year and month
+                'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
+            )
         ),
         http.RssSource(
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
-            '/tmp/ls7-cpf/{year}',
+            '/tmp/anc/ls7-tle/{year}',
             filename_proxy=RegexpFilenameProxy(
                 # Extract year and juldate from Filename. Eg:
                 # 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
                 '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
             )
+        ),
+        http.HttpSource(
+            [
+                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
+                'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
+            ],
+            '/tmp/anc'
         )
     ]
 

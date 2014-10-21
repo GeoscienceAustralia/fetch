@@ -3,6 +3,7 @@ HTTP-based download of files.
 """
 
 import os
+import re
 import tempfile
 import requests
 import logging
@@ -40,7 +41,7 @@ def fetch_file(target_dir, name, reporter, url, override_existing=False):
     """
 
     if not os.path.exists(target_dir):
-        os.mkdir(target_dir)
+        os.makedirs(target_dir)
 
     target_path = os.path.join(target_dir, name)
 
@@ -111,11 +112,12 @@ class HttpListingSource(DataSource):
 
     A pattern can be supplied to limit files by filename.
     """
-    def __init__(self, listing_url, file_pattern, target_dir, filename_proxy=None):
+    def __init__(self, listing_url, target_dir, filename_pattern='.*', filename_proxy=None):
         super(HttpListingSource, self).__init__()
 
         self.listing_url = listing_url
-        self.file_pattern = file_pattern
+        #: :type: re.Regexp
+        self.filename_pattern_re = re.compile(filename_pattern)
         self.target_dir = target_dir
         self.filename_proxy = filename_proxy
 
@@ -136,8 +138,9 @@ class HttpListingSource(DataSource):
         name_paths = [(anchor.text, urljoin(url, anchor.attrib['href'])) for anchor in anchors]
 
         for name, target_url in name_paths:
-
-            # TODO: If name matches pattern.
+            if not self.filename_pattern_re.match(name):
+                _log.info('Filename (%r) doesn\'t match pattern, skipping.', name)
+                continue
 
             target_location = self.target_dir
 

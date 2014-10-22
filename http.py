@@ -38,6 +38,7 @@ def _fetch_file(target_dir, target_name, reporter, url, override_existing=False,
     :type url: str
     """
     def do_fetch(t):
+        """Fetch data to filename t"""
         with closing(requests.get(url, stream=True)) as res:
             if res.status_code != 200:
                 _log.debug('Received text %r', res.text)

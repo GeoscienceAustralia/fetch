@@ -162,7 +162,7 @@ def fetch_file(uri,
             target_dir,
             source_filename=target_filename
         )
-        target_filename= filename_transform.transform_filename(target_filename)
+        target_filename = filename_transform.transform_filename(target_filename)
 
     target_path = os.path.join(target_dir, target_filename)
     if os.path.exists(target_path) and not override_existing:
@@ -187,5 +187,4 @@ def fetch_file(uri,
     os.rename(t, target_path)
     # Report as complete.
     reporter.file_complete(uri, target_filename, target_path)
-
 

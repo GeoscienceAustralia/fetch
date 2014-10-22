@@ -44,6 +44,7 @@ def execute_modules(modules):
     """
     reporter = _PrintReporter()
     # TODO: Filter based on module period (daily, hourly etc).
+    # TODO: Parallel execution
     for module in modules:
         _log.info('Running %s: %r', DataSource.__name__, module)
         try:

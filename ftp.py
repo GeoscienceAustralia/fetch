@@ -49,6 +49,7 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
                 continue
 
             def ftp_fetch(t):
+                """Fetch data to filename t"""
                 with open(t, 'wb') as f:
                     ftp.retrbinary('RETR ' + filename, f.write)
 

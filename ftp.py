@@ -5,9 +5,8 @@ import ftplib
 import logging
 import os
 import re
-import tempfile
 
-from . import DataSource
+from . import DataSource, fetch_file
 
 
 _log = logging.getLogger(__name__)
@@ -49,41 +48,19 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
                 _log.debug('Filename %r doesn\'t match pattern, skipping.', filename)
                 continue
 
-            target_file_dir = target_dir
-            target_filename = filename
+            def ftp_fetch(t):
+                with open(t, 'wb') as f:
+                    ftp.retrbinary('RETR ' + filename, f.write)
 
-            if filename_transform:
-                target_file_dir = filename_transform.transform_output_path(
-                    target_dir,
-                    source_filename=filename
-                )
-                target_filename = filename_transform.transform_filename(filename)
-
-            target_path = os.path.join(target_file_dir, target_filename)
-
-            if os.path.exists(target_path) and not override_existing:
-                _log.info('Path exists %r. Skipping', target_path)
-                return
-
-            t = tempfile.mktemp(
-                dir=target_dir,
-                prefix='.fetch-'
+            fetch_file(
+                'ftp://%s%s%s' % (hostname, remote_dir, filename),
+                ftp_fetch,
+                reporter,
+                filename,
+                target_dir,
+                filename_transform=filename_transform,
+                override_existing=override_existing
             )
-            # TODO: Cleanup tmp files on failure
-
-            with open(t, 'wb') as f:
-                ftp.retrbinary('RETR ' + filename, f.write)
-
-            size_bytes = os.path.getsize(t)
-            if size_bytes == 0:
-                _log.debug('Empty file returned for file %r/%r', remote_dir, filename)
-                reporter.file_error(filename, "Empty return")
-                return
-
-            # Move to destination
-            os.rename(t, target_path)
-            # Report as complete.
-            reporter.file_complete('ftp://%s%s%s' % (hostname, remote_dir, filename), target_filename, target_path)
     finally:
         ftp.quit()
 

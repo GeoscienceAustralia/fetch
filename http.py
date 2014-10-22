@@ -2,9 +2,7 @@
 HTTP-based download of files.
 """
 
-import os
 import re
-import tempfile
 import requests
 import logging
 from contextlib import closing
@@ -12,7 +10,7 @@ import feedparser
 from lxml import etree
 from urlparse import urljoin
 
-from . import DataSource
+from . import DataSource, fetch_file
 
 
 _log = logging.getLogger(__name__)
@@ -39,51 +37,28 @@ def _fetch_file(target_dir, target_name, reporter, url, override_existing=False,
     :type reporter: FetchReporter
     :type url: str
     """
+    def do_fetch(t):
+        with closing(requests.get(url, stream=True)) as res:
+            if res.status_code != 200:
+                _log.debug('Received text %r', res.text)
+                reporter.file_error(url, "Status code %r" % res.status_code)
+                return
 
-    if filename_transform:
-        target_dir = filename_transform.transform_output_path(
-            target_dir,
-            source_filename=target_name
-        )
-        target_name = filename_transform.transform_filename(target_name)
+            with open(t, 'wb') as f:
+                for chunk in res.iter_content(4096):
+                    if chunk:
+                        f.write(chunk)
+                        f.flush()
 
-    if not os.path.exists(target_dir):
-        _log.info('Creating dir %r', target_dir)
-        os.makedirs(target_dir)
-
-    target_path = os.path.join(target_dir, target_name)
-
-    if os.path.exists(target_path) and not override_existing:
-        _log.info('Path exists (%r). Skipping', target_path)
-        return
-
-    with closing(requests.get(url, stream=True)) as res:
-        if res.status_code != 200:
-            _log.debug('Received text %r', res.text)
-            reporter.file_error(url, "Status code %r" % res.status_code)
-            return
-
-        t = tempfile.mktemp(
-            dir=target_dir,
-            prefix='.fetch-'
-        )
-        # TODO: Cleanup tmp files on failure
-
-        with open(t, 'wb') as f:
-            for chunk in res.iter_content(4096):
-                if chunk:
-                    f.write(chunk)
-                    f.flush()
-    size_bytes = os.path.getsize(t)
-    if size_bytes == 0:
-        _log.debug('Empty file returned for url %r', url)
-        reporter.file_error(url, "Empty return")
-        return
-
-    # Move to destination
-    os.rename(t, target_path)
-    # Report as complete.
-    reporter.file_complete(url, target_name, target_path)
+    fetch_file(
+        url,
+        do_fetch,
+        reporter,
+        target_name,
+        target_dir,
+        filename_transform=filename_transform,
+        override_existing=override_existing
+    )
 
 
 class HttpSource(DataSource):
@@ -209,6 +184,8 @@ class RssSource(DataSource):
                 url,
                 filename_transform=self.filename_transform
             )
+
+            break
 
 
 

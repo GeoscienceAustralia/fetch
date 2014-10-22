@@ -1,8 +1,10 @@
 """
 A package for automatically fetching files (eg. Ancillary).
 """
+import os
 import re
 import logging
+import tempfile
 
 _log = logging.getLogger(__name__)
 
@@ -135,5 +137,55 @@ class RegexpOutputPathTransform(FilenameTransform):
         return path.format(**groups)
 
 
+def fetch_file(uri,
+               fetch_fn,
+               reporter,
+               target_filename,
+               target_dir,
+               filename_transform=None,
+               override_existing=False):
+    """
+    Common code for fetching a file. The actual
+
+    transfer is handled by a function passed in as fetch_fn, and
+    so is not specific to a protocol.
+    :param uri: A URI identifier for this file.
+    :param fetch_fn: Function taking a filename argument to download to.
+    :param reporter: The fetch reporter
+    :param target_filename: The destination filename
+    :param target_dir: The destination directory
+    :param filename_transform: A transform for output filenames/folders.
+    :param override_existing: Should files be re-downloaded if they already exist?
+    """
+    if filename_transform:
+        target_dir = filename_transform.transform_output_path(
+            target_dir,
+            source_filename=target_filename
+        )
+        target_filename= filename_transform.transform_filename(target_filename)
+
+    target_path = os.path.join(target_dir, target_filename)
+    if os.path.exists(target_path) and not override_existing:
+        _log.info('Path exists %r. Skipping', target_path)
+        return
+
+    t = tempfile.mktemp(
+        dir=target_dir,
+        prefix='.fetch-'
+    )
+    # TODO: Cleanup tmp files on failure
+
+    fetch_fn(t)
+
+    size_bytes = os.path.getsize(t)
+    if size_bytes == 0:
+        _log.debug('Empty file returned for file %r', uri)
+        reporter.file_error(uri, "Empty return")
+        return
+
+    # Move to destination
+    os.rename(t, target_path)
+    # Report as complete.
+    reporter.file_complete(uri, target_filename, target_path)
 
 

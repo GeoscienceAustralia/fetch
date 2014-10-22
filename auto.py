@@ -7,9 +7,11 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
-from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
 import logging
 import sys
+
+from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
+
 
 _log = logging.getLogger(__name__)
 
@@ -49,6 +51,8 @@ def execute_modules(modules):
         _log.info('Running %s: %r', DataSource.__name__, module)
         try:
             module.trigger(reporter)
+        except KeyboardInterrupt:
+            raise
         except:
             _log.exception('Module %r failure', module)
 
@@ -63,7 +67,7 @@ def load_modules():
     # TODO: Load dynamically.
     return [
         http.RssSource(
-        'https://landsat.usgs.gov/L5CPFRSS.rss',
+            'https://landsat.usgs.gov/L5CPFRSS.rss',
             '/tmp/anc/ls5-cpf'
         ),
         http.RssSource(

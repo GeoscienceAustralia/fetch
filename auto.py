@@ -98,7 +98,7 @@ def load_modules():
         ftp.FtpSource(
             'ftp.cdc.noaa.gov',
             source_dir='/Datasets/ncep.reanalysis/surface',
-            name_pattern='pr_wtr.eatm.[0-9}{4}.nc',
+            name_pattern='pr_wtr.eatm.[0-9]{4}.nc',
             target_dir='/tmp/anc/vapour'
         )
     ]

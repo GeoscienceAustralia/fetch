@@ -25,7 +25,8 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
         _log.info('Creating dir %r', target_dir)
         os.makedirs(target_dir)
 
-    with ftplib.FTP(hostname) as ftp:
+    ftp = ftplib.FTP(hostname)
+    try:
         ftp.login()
 
         _log.debug('Changing dir %r', remote_dir)
@@ -45,7 +46,7 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
         for filename in files:
             _log.debug('Next filename: %r', filename)
             if not re.match(name_pattern, filename):
-                _log.info('Filename (%r) doesn\'t match pattern, skipping.', filename)
+                _log.debug('Filename %r doesn\'t match pattern, skipping.', filename)
                 continue
 
             target_file_dir = target_dir
@@ -61,7 +62,7 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
             target_path = os.path.join(target_file_dir, target_filename)
 
             if os.path.exists(target_path) and not override_existing:
-                _log.info('Path exists (%r). Skipping', target_path)
+                _log.info('Path exists %r. Skipping', target_path)
                 return
 
             t = tempfile.mktemp(
@@ -83,6 +84,8 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
             os.rename(t, target_path)
             # Report as complete.
             reporter.file_complete('ftp://%s%s%s' % (hostname, remote_dir, filename), target_filename, target_path)
+    finally:
+        ftp.quit()
 
 
 class FtpSource(DataSource):
@@ -116,7 +119,7 @@ class FtpSource(DataSource):
 
         _fetch_files(
             self.hostname,
-            self.target_dir,
+            self.source_dir,
             self.name_pattern,
             self.target_dir,
             reporter,

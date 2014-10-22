@@ -186,7 +186,6 @@ class RssSource(DataSource):
                 filename_transform=self.filename_transform
             )
 
-            break
 
 
 

@@ -146,10 +146,11 @@ def fetch_file(uri,
                filename_transform=None,
                override_existing=False):
     """
-    Common code for fetching a file. The actual
+    Common code for fetching a file.
 
-    transfer is handled by a function passed in as fetch_fn, and
+    The actual transfer is handled by a callback (fetch_fn), and
     so is not specific to a protocol.
+
     :param uri: A URI identifier for this file.
     :param fetch_fn: Function taking a filename argument to download to.
     :param reporter: The fetch reporter

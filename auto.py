@@ -7,7 +7,7 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
-from . import http, DataSource, FetchReporter, RegexpOutputPathTransform
+from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
 import logging
 import sys
 
@@ -18,6 +18,7 @@ class _PrintReporter(FetchReporter):
     """
     Send events to the log.
     """
+
     def file_complete(self, uri, name, path):
         """
         :type uri: str
@@ -59,7 +60,7 @@ def load_modules():
     # TODO: Load dynamically.
     return [
         http.RssSource(
-            'https://landsat.usgs.gov/L5CPFRSS.rss',
+        'https://landsat.usgs.gov/L5CPFRSS.rss',
             '/tmp/anc/ls5-cpf'
         ),
         http.RssSource(
@@ -93,6 +94,12 @@ def load_modules():
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
             ],
             '/tmp/anc'
+        ),
+        ftp.FtpSource(
+            'ftp.cdc.noaa.gov',
+            source_dir='/Datasets/ncep.reanalysis/surface',
+            name_pattern='pr_wtr.eatm.[0-9}{4}.nc',
+            target_dir='/tmp/anc/vapour'
         )
     ]
 

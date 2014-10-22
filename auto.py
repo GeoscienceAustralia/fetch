@@ -46,8 +46,10 @@ def execute_modules(modules):
     # TODO: Filter based on module period (daily, hourly etc).
     for module in modules:
         _log.info('Running %s: %r', DataSource.__name__, module)
-
-        module.trigger(reporter)
+        try:
+            module.trigger(reporter)
+        except:
+            _log.exception('Module %r failure', module)
 
 
 def load_modules():

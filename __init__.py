@@ -4,6 +4,7 @@ A package for automatically fetching files (eg. Ancillary).
 import os
 import re
 import logging
+import shutil
 import tempfile
 
 _log = logging.getLogger(__name__)
@@ -169,22 +170,26 @@ def fetch_file(uri,
         _log.info('Path exists %r. Skipping', target_path)
         return
 
-    t = tempfile.mktemp(
-        dir=target_dir,
-        prefix='.fetch-'
-    )
-    # TODO: Cleanup tmp files on failure
+    t = None
+    try:
+        t = tempfile.mktemp(
+            dir=target_dir,
+            prefix='.fetch-'
+        )
 
-    fetch_fn(t)
+        fetch_fn(t)
 
-    size_bytes = os.path.getsize(t)
-    if size_bytes == 0:
-        _log.debug('Empty file returned for file %r', uri)
-        reporter.file_error(uri, "Empty return")
-        return
+        size_bytes = os.path.getsize(t)
+        if size_bytes == 0:
+            _log.debug('Empty file returned for file %r', uri)
+            reporter.file_error(uri, "Empty return")
+            return
 
-    # Move to destination
-    os.rename(t, target_path)
-    # Report as complete.
-    reporter.file_complete(uri, target_filename, target_path)
+        # Move to destination
+        os.rename(t, target_path)
+        # Report as complete.
+        reporter.file_complete(uri, target_filename, target_path)
+    finally:
+        if t and os.path.exists(t):
+            shutil.rmtree(t)
 

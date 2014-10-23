@@ -107,7 +107,7 @@ def load_modules():
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
             ],
-            '/tmp/anc'
+            '/tmp/anc',
         ),
         # Water vapour
         ftp.FtpListingSource(
@@ -134,13 +134,14 @@ def load_modules():
             target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}',
             # Repeat between 1 day ago to 1 day in the future:
             from_days=-1,
-            to_days=1
+            to_days=1,
         ),
         # LUTS
         http.HttpListingSource(
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
-            target_dir='/tmp/anc/luts'
+            target_dir='/tmp/anc/luts',
         ),
+        # Modis TLE
         ftp.FtpSource(
             hostname='is.sci.gsfc.nasa.gov',
             source_paths=[
@@ -148,9 +149,9 @@ def load_modules():
                 '/ancillary/ephemeris/tle/norad.tle',
                 '/ancillary/ephemeris/tle/noaa/noaa.tle',
             ],
-            target_dir='/tmp/anc/tle',
             # Prepend the current date to the output filename
-            filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}')
+            filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}'),
+            target_dir='/tmp/anc/tle',
         )
     ]
 

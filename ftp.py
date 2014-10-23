@@ -59,9 +59,15 @@ def _fetch_files(hostname,
 
 
 class FtpSource(DataSource):
+    """
+    Download specific files from FTP.
+
+    This is useful for unchanging URLs that need to be
+    repeatedly updated.
+    """
     def __init__(self, hostname, source_paths, target_dir, filename_transform=None):
         """
-        :type source_urls: list of str
+        :type source_paths: list of str
         :type target_dir: str
         :return:
         """
@@ -74,7 +80,7 @@ class FtpSource(DataSource):
 
     def trigger(self, reporter):
         """
-        Download all URLs, overriding existing.
+        Download all files, overriding existing.
         :type reporter: FetchReporter
         :return:
         """
@@ -94,10 +100,7 @@ class FtpSource(DataSource):
 
 class FtpListingSource(DataSource):
     """
-    Download from an FTP listing.
-
-    This is useful for unchanging URLs that need to be
-    repeatedly updated.
+    Download files matching a pattern in an FTP directory.
     """
 
     def __init__(self, hostname, source_dir, name_pattern, target_dir):

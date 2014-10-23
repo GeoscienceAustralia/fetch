@@ -199,6 +199,22 @@ def load_modules():
             from_days=-1,
             to_days=1
         ),
+        # Modis Att & Ephem
+        DateRangeSource(
+            http.HttpListingSource(
+                # Added via the date range pattern
+                source_url='',
+                # Added via the date range pattern
+                target_dir='',
+                listing_name_filter='[AP]M1(ATT|EPH).*'
+            ),
+            overridden_properties={
+                'source_url': 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/Attitude-Ephemeris/{year}/{julday}',
+                'target_dir': anc_data + '/sensor-specific/MODIS/ancillary/{year}/{julday}',
+            },
+            from_days=-3,
+            to_days=0,
+        )
     ]
 
 

@@ -1,6 +1,7 @@
 """
 A package for automatically fetching files (eg. Ancillary).
 """
+import datetime
 import os
 import re
 import logging
@@ -122,9 +123,11 @@ class RegexpOutputPathTransform(FilenameTransform):
         :param path:
         :param source_filename:
 
-        >>> RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})').transform_output_path('/tmp/out/{year}', 'LS8_2003')
+        >>> t = RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})')
+        >>> t.transform_output_path('/tmp/out/{year}', 'LS8_2003')
         '/tmp/out/2003'
-        >>> RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})').transform_output_path('/tmp/out', 'LS8_2003')
+        >>> t = RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})')
+        >>> t.transform_output_path('/tmp/out', 'LS8_2003')
         '/tmp/out'
         """
         m = re.match(self.pattern, source_filename)
@@ -136,6 +139,43 @@ class RegexpOutputPathTransform(FilenameTransform):
         groups = m.groupdict()
 
         return path.format(**groups)
+
+
+class DateFilenameTransform(FilenameTransform):
+    """
+    Add date information to filenames according to a format string.
+
+    Defaults to current date.
+    """
+    def __init__(self, format_, fixed_date=None):
+        """
+        :type format_: str
+
+        >>> d = DateFilenameTransform('{year}{month}{day}.{filename}')
+        >>> d.fixed_date = datetime.datetime(year=2013, month=8, day=6)
+        >>> d.transform_filename('output.log')
+        '20130806.output.log'
+        >>> d.format_ = '{filename}'
+        >>> d.transform_filename('output.log')
+        'output.log'
+        """
+        super(DateFilenameTransform, self).__init__()
+        self.format_ = format_
+        self.fixed_date = fixed_date
+
+    def transform_filename(self, source_filename):
+
+        day = self.fixed_date if self.fixed_date else datetime.datetime.utcnow()
+        date_params = {
+            'year': day.strftime('%Y'),
+            'month': day.strftime('%m'),
+            'day': day.strftime('%d'),
+            'julday': day.strftime('%j')
+        }
+        return self.format_.format(
+            filename=source_filename,
+            **date_params
+        )
 
 
 def fetch_file(uri,

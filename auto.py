@@ -11,6 +11,7 @@ import logging
 import sys
 
 from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
+from onreceipt.fetch import DateFilenameTransform
 
 
 _log = logging.getLogger(__name__)
@@ -95,8 +96,8 @@ def load_modules():
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
             '/tmp/anc/ls8-tle/{year}',
             filename_transform=RegexpOutputPathTransform(
-                # Extract year from filename. Eg:
-                # 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
+                # Extract year from the filename to use in the output directory.
+                #     Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
                 '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
             )
         ),
@@ -120,11 +121,17 @@ def load_modules():
             http.HttpListingSource(
                 source_url='',
                 target_dir='',
-
+                # Match three file types:
+                #    gdas1.pgrb00.1p0deg.20110617_12_000.grib2
+                #    NISE_SSMISF17_20110617.HDFEOS
+                #    gfs.press_gr.0p5deg_pt.20110617_00_003.npoess.grib2
                 listing_name_filter='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
             ),
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
-            target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}'
+            target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}',
+            # Repeat between 1 day ago to 1 day in the future:
+            from_days=-1,
+            to_days=1
         ),
         # LUTS
         http.HttpListingSource(
@@ -138,7 +145,9 @@ def load_modules():
                 '/ancillary/ephemeris/tle/norad.tle',
                 '/ancillary/ephemeris/tle/noaa/noaa.tle',
             ],
-            target_dir='/tmp/anc/tle'
+            target_dir='/tmp/anc/tle',
+            # Prepend the current date to the output filename
+            filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}')
         )
     ]
 

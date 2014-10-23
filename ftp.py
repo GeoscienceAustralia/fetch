@@ -12,41 +12,33 @@ from . import DataSource, fetch_file
 _log = logging.getLogger(__name__)
 
 
-def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
+def _fetch_files(hostname,
+                 target_dir,
+                 reporter,
+                 get_filepaths_fn,
                  override_existing=False,
                  filename_transform=None):
     """
-    Fetch fetch files matching a pattern at the given FTP server.
+    Fetch fetch files on the given FTP server.
 
+    The get_filepaths_fn callback is used to get a list of files to download.
+
+    It it passed an instance of the connection so that it can query the server if needed.
+
+    :type get_filepaths_fn: (ftplib.FTP) -> list of str
+    :type hostname: str
+    :type target_dir: str
+    :type reporter: FetchReporter
     """
-
-    if not os.path.exists(target_dir):
-        _log.info('Creating dir %r', target_dir)
-        os.makedirs(target_dir)
 
     ftp = ftplib.FTP(hostname)
     try:
         ftp.login()
 
-        _log.debug('Changing dir %r', remote_dir)
-        ftp.cwd(remote_dir)
-
-        try:
-            files = ftp.nlst()
-        except ftplib.error_perm, resp:
-            if str(resp) == "550 No files found":
-                _log.info("No files in remote directory")
-                files = []
-            else:
-                raise
-
-        _log.debug('File list of length %r', len(files))
+        files = get_filepaths_fn(ftp)
 
         for filename in files:
             _log.debug('Next filename: %r', filename)
-            if not re.match(name_pattern, filename):
-                _log.debug('Filename %r doesn\'t match pattern, skipping.', filename)
-                continue
 
             def ftp_fetch(t):
                 """Fetch data to filename t"""
@@ -54,7 +46,7 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
                     ftp.retrbinary('RETR ' + filename, f.write)
 
             fetch_file(
-                'ftp://%s%s%s' % (hostname, remote_dir, filename),
+                'ftp://%s%s' % (hostname, filename),
                 ftp_fetch,
                 reporter,
                 filename,
@@ -67,6 +59,40 @@ def _fetch_files(hostname, remote_dir, name_pattern, target_dir, reporter,
 
 
 class FtpSource(DataSource):
+    def __init__(self, hostname, source_paths, target_dir, filename_transform=None):
+        """
+        :type source_urls: list of str
+        :type target_dir: str
+        :return:
+        """
+        super(FtpSource, self).__init__()
+
+        self.hostname = hostname
+        self.source_paths = source_paths
+        self.target_dir = target_dir
+        self.filename_transform = filename_transform
+
+    def trigger(self, reporter):
+        """
+        Download all URLs, overriding existing.
+        :type reporter: FetchReporter
+        :return:
+        """
+
+        def get_files(_):
+            """Return a static set of file paths to download"""
+            return self.source_paths
+
+        _fetch_files(
+            self.hostname,
+            self.target_dir,
+            reporter,
+            get_files,
+            override_existing=True
+        )
+
+
+class FtpListingSource(DataSource):
     """
     Download from an FTP listing.
 
@@ -80,7 +106,7 @@ class FtpSource(DataSource):
         :type target_dir: str
         :return:
         """
-        super(FtpSource, self).__init__()
+        super(FtpListingSource, self).__init__()
 
         self.hostname = hostname
         self.source_dir = source_dir
@@ -95,12 +121,30 @@ class FtpSource(DataSource):
         :return:
         """
 
+        def get_files(ftp):
+            """Get files that match the name_pattern in the target directory."""
+            try:
+                files = ftp.nlst(self.source_dir)
+            except ftplib.error_perm, resp:
+                if str(resp) == "550 No files found":
+                    _log.info("No files in remote directory")
+                    files = []
+                else:
+                    raise
+
+            _log.debug('File list of length %r', len(files))
+            files = [
+                os.path.join(self.source_dir, f)
+                for f in files if re.match(self.name_pattern, f)
+            ]
+            _log.debug('Filtered list of length %r', len(files))
+            return files
+
         _fetch_files(
             self.hostname,
-            self.source_dir,
-            self.name_pattern,
             self.target_dir,
             reporter,
+            get_files,
             override_existing=True
         )
 

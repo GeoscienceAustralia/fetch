@@ -42,6 +42,7 @@ def _fetch_files(hostname,
 
             def ftp_fetch(t):
                 """Fetch data to filename t"""
+                _log.debug('Retrieving %r to %r', filename, t)
                 with open(t, 'wb') as f:
                     ftp.retrbinary('RETR ' + filename, f.write)
 
@@ -49,7 +50,7 @@ def _fetch_files(hostname,
                 'ftp://%s%s' % (hostname, filename),
                 ftp_fetch,
                 reporter,
-                filename,
+                os.path.basename(filename),
                 target_dir,
                 filename_transform=filename_transform,
                 override_existing=override_existing
@@ -65,6 +66,7 @@ class FtpSource(DataSource):
     This is useful for unchanging URLs that need to be
     repeatedly updated.
     """
+
     def __init__(self, hostname, source_paths, target_dir, filename_transform=None):
         """
         :type source_paths: list of str

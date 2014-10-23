@@ -145,7 +145,7 @@ def load_modules():
         ftp.FtpSource(
             hostname='is.sci.gsfc.nasa.gov',
             source_paths=[
-                '/ancillary/ephemeris/tle/dr1.tle',
+                '/ancillary/ephemeris/tle/drl.tle',
                 '/ancillary/ephemeris/tle/norad.tle',
                 '/ancillary/ephemeris/tle/noaa/noaa.tle',
             ],

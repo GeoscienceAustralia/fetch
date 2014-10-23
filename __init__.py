@@ -232,10 +232,11 @@ def fetch_file(uri,
             return
 
         # Move to destination
+        _log.debug('Rename %r -> %r', t, target_path)
         os.rename(t, target_path)
         # Report as complete.
         reporter.file_complete(uri, target_filename, target_path)
     finally:
         if t and os.path.exists(t):
-            shutil.rmtree(t)
+            os.remove(t)
 

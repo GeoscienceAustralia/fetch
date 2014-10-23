@@ -137,11 +137,17 @@ class FtpListingSource(DataSource):
                     files = []
                 else:
                     raise
+            except ftplib.error_temp, resp:
+                if str(resp).strip().startswith('450'):
+                    _log.info("No remote directory")
+                    files = []
+                else:
+                    raise
 
             _log.debug('File list of length %r', len(files))
             files = [
                 os.path.join(self.source_dir, f)
-                for f in files if re.match(self.name_pattern, f)
+                for f in files if re.match(self.name_pattern, os.path.basename(f))
             ]
             _log.debug('Filtered list of length %r', len(files))
             return files

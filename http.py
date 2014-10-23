@@ -94,22 +94,35 @@ class HttpSource(DataSource):
             _fetch_file(self.target_dir, name, reporter, url, override_existing=True)
 
 
-def _date_range(from_days, to_days):
+def _date_range(from_days_from_now, to_days_from_now):
     """
+    Get a range of dates relative to the current date.
 
-    :type from_days: int
-    :type to_days: int
+    :type from_days_from_now: int
+    :type to_days_from_now: int
     :rtype: list od datetime.datetime
     """
-    start_day = datetime.datetime.utcnow() + datetime.timedelta(days=from_days)
-    days = to_days - from_days
+    start_day = datetime.datetime.utcnow() + datetime.timedelta(days=from_days_from_now)
+    days = to_days_from_now - from_days_from_now
 
     for day in (start_day + datetime.timedelta(days=n) for n in range(days + 1)):
         yield day
 
 
 class DateRangeSource(DataSource):
+    """
+    Repeat a source multiple times with different dates.
+
+    The URL and directory names can have date patterns replaced using string.format syntax.
+    """
     def __init__(self, source_prototype, source_url=None, target_dir=None, from_days=-1, to_days=1):
+        """
+        :type source_prototype: DataSource
+        :type source_url: str
+        :type target_dir: str
+        :type from_days: int
+        :type to_days: int
+        """
         super(DateRangeSource, self).__init__()
         self.source_url = source_url
         self.target_dir = target_dir
@@ -121,6 +134,9 @@ class DateRangeSource(DataSource):
         self.to_days = to_days
 
     def trigger(self, reporter):
+        """
+        Run the DataSource prototype once for each date in the range.
+        """
         for day in _date_range(self.from_days, self.to_days):
             date_params = {
                 'year': day.strftime('%Y'),
@@ -161,6 +177,10 @@ class HttpListingSource(DataSource):
         Download the given listing page, and any links that match the name pattern.
         """
         res = requests.get(self.source_url)
+        if res.status_code == 404:
+            _log.debug("Listing page doesn't exist yet. Skipping.")
+            return
+
         if res.status_code != 200:
             _log.debug('Received text %r', res.text)
             reporter.file_error(self.source_url, "Status code %r" % res.status_code)
@@ -176,7 +196,7 @@ class HttpListingSource(DataSource):
             source_url = urljoin(url, anchor.attrib['href'])
 
             if not re.match(self.listing_name_filter, name):
-                _log.info('Filename (%r) doesn\'t match pattern, skipping.', name)
+                _log.info("Filename (%r) doesn't match pattern, skipping.", name)
                 continue
 
             _fetch_file(

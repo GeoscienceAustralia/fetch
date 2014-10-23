@@ -96,7 +96,8 @@ class FtpSource(DataSource):
             self.target_dir,
             reporter,
             get_files,
-            override_existing=True
+            override_existing=True,
+            filename_transform=self.filename_transform
         )
 
 

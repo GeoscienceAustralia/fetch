@@ -5,7 +5,6 @@ import datetime
 import os
 import re
 import logging
-import shutil
 import tempfile
 
 _log = logging.getLogger(__name__)
@@ -147,6 +146,7 @@ class DateFilenameTransform(FilenameTransform):
 
     Defaults to current date.
     """
+
     def __init__(self, format_, fixed_date=None):
         """
         :type format_: str
@@ -164,7 +164,6 @@ class DateFilenameTransform(FilenameTransform):
         self.fixed_date = fixed_date
 
     def transform_filename(self, source_filename):
-
         day = self.fixed_date if self.fixed_date else datetime.datetime.utcnow()
         date_params = {
             'year': day.strftime('%Y'),
@@ -242,3 +241,61 @@ def fetch_file(uri,
         if t and os.path.exists(t):
             os.remove(t)
 
+
+def _date_range(from_days_from_now, to_days_from_now):
+    """
+    Get a range of dates relative to the current date.
+
+    :type from_days_from_now: int
+    :type to_days_from_now: int
+    :rtype: list od datetime.datetime
+    """
+    start_day = datetime.datetime.utcnow() + datetime.timedelta(days=from_days_from_now)
+    days = to_days_from_now - from_days_from_now
+
+    for day in (start_day + datetime.timedelta(days=n) for n in range(days + 1)):
+        yield day
+
+
+class DateRangeSource(DataSource):
+    """
+    Repeat a source multiple times with different dates.
+
+
+    """
+
+    def __init__(self, source_prototype, overridden_properties, from_days=-1, to_days=1):
+        """
+        :type source_prototype: DataSource
+        :type overridden_properties: dict of (str, str)
+        :type from_days: int
+        :type to_days: int
+        """
+        super(DateRangeSource, self).__init__()
+        self.overidden_properties = overridden_properties
+
+        # : :type: DataSource
+        self.source_prototype = source_prototype
+
+        self.from_days = from_days
+        self.to_days = to_days
+
+    def trigger(self, reporter):
+        """
+        Run the DataSource prototype once for each date in the range.
+        """
+        for day in _date_range(self.from_days, self.to_days):
+            date_params = {
+                'year': day.strftime('%Y'),
+                'month': day.strftime('%m'),
+                'day': day.strftime('%d'),
+                'julday': day.strftime('%j')
+            }
+
+            for name, pattern in self.overidden_properties.iteritems():
+                value = pattern.format(**date_params)
+                _log.debug('Setting %r=%r', name, value)
+                setattr(self.source_prototype, name, value)
+
+            _log.info('Triggering %r', self.source_prototype)
+            self.source_prototype.trigger(reporter)

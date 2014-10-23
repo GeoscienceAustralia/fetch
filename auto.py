@@ -11,7 +11,7 @@ import logging
 import sys
 
 from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
-from onreceipt.fetch import DateFilenameTransform
+from onreceipt.fetch import DateFilenameTransform, DateRangeSource
 
 
 _log = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ def load_modules():
         ),
         # NPP GDAS and forecast
         # Download a date range of 3 days
-        http.DateRangeSource(
+        DateRangeSource(
             http.HttpListingSource(
                 # Added via the date range pattern
                 source_url='',
@@ -129,11 +129,13 @@ def load_modules():
                 # Match three file types:
                 # gdas1.pgrb00.1p0deg.20110617_12_000.grib2
                 # NISE_SSMISF17_20110617.HDFEOS
-                #    gfs.press_gr.0p5deg_pt.20110617_00_003.npoess.grib2
+                # gfs.press_gr.0p5deg_pt.20110617_00_003.npoess.grib2
                 listing_name_filter='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
             ),
-            source_url='http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
-            target_dir=anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/{year}_{month}_{day}_{julday}',
+            overridden_properties={
+                'source_url': 'http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
+                'target_dir': anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/{year}_{month}_{day}_{julday}',
+            },
             # Repeat between 1 day ago to 1 day in the future:
             from_days=-1,
             to_days=1,
@@ -162,7 +164,41 @@ def load_modules():
             # Prepend the current date to the output filename
             filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}'),
             target_dir=anc_data + '/sensor-specific/NOAA/tle',
-        )
+        ),
+        # Modis GDAS
+        DateRangeSource(
+            ftp.FtpListingSource(
+                hostname='ftp.ssec.wisc.edu',
+                # Added via the date range pattern
+                source_dir='',
+                # Added via the date range pattern
+                target_dir='',
+                name_pattern='gdas.*'
+            ),
+            overridden_properties={
+                'source_dir': '/pub/eosdb/ancillary/{year}_{month}_{day}_{julday}',
+                'target_dir': anc_data + '/sensor-specific/MODIS/ancillary/{year}/{month}',
+            },
+            from_days=-1,
+            to_days=1
+        ),
+        # Modis GFS
+        DateRangeSource(
+            ftp.FtpListingSource(
+                hostname='ftp.ssec.wisc.edu',
+                # Added via the date range pattern
+                source_dir='',
+                # Added via the date range pattern
+                target_dir='',
+                name_pattern='gfs.*'
+            ),
+            overridden_properties={
+                'source_dir': '/pub/eosdb/ancillary/{year}_{month}_{day}_{julday}/forecast',
+                'target_dir': anc_data + '/sensor-specific/MODIS/ancillary/{year}/{month}/forecast',
+            },
+            from_days=-1,
+            to_days=1
+        ),
     ]
 
 

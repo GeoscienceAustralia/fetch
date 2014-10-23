@@ -166,7 +166,12 @@ def fetch_file(uri,
         )
         target_filename = filename_transform.transform_filename(target_filename)
 
+    if not os.path.exists(target_dir):
+        _log.info('Creating dir %r', target_dir)
+        os.makedirs(target_dir)
+
     target_path = os.path.join(target_dir, target_filename)
+
     if os.path.exists(target_path) and not override_existing:
         _log.info('Path exists %r. Skipping', target_path)
         return

@@ -192,8 +192,13 @@ class HttpListingSource(DataSource):
         anchors = page.xpath('//a')
 
         for anchor in anchors:
+            #: :type: str
             name = anchor.text
             source_url = urljoin(url, anchor.attrib['href'])
+
+            if not anchor.attrib['href'].endswith(name):
+                _log.info('Not a filename %r, skipping.', name)
+                continue
 
             if not re.match(self.listing_name_filter, name):
                 _log.info("Filename (%r) doesn't match pattern, skipping.", name)

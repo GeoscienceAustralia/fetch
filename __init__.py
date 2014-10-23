@@ -223,7 +223,9 @@ def fetch_file(uri,
             prefix='.fetch-'
         )
 
+        _log.debug('Running fetch for file %r', t)
         fetch_fn(t)
+        _log.debug('Fetch complete')
 
         size_bytes = os.path.getsize(t)
         if size_bytes == 0:

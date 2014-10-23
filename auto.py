@@ -66,18 +66,22 @@ def load_modules():
     # Hard-code the modules for now.
     # TODO: Load dynamically.
     return [
+        # LS5 CPF
         http.RssSource(
             'https://landsat.usgs.gov/L5CPFRSS.rss',
             '/tmp/anc/ls5-cpf'
         ),
+        # LS7 CPF
         http.RssSource(
             'http://landsat.usgs.gov/L7CPFRSS.rss',
             '/tmp/anc/ls7-cpf'
         ),
+        # LS8 CPF
         http.RssSource(
             'http://landsat.usgs.gov/cpf.rss',
             '/tmp/anc/ls8-cpf'
         ),
+        # LS8 BPF
         http.RssSource(
             'http://landsat.usgs.gov/bpf.rss',
             '/tmp/anc/ls8-bpf/{year}/{month}',
@@ -86,6 +90,7 @@ def load_modules():
                 'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
             )
         ),
+        # Landsat 8 TLE
         http.RssSource(
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
             '/tmp/anc/ls8-tle/{year}',
@@ -95,6 +100,7 @@ def load_modules():
                 '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
             )
         ),
+        # utcpole/leapsec
         http.HttpSource(
             [
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
@@ -102,12 +108,14 @@ def load_modules():
             ],
             '/tmp/anc'
         ),
+        # Water vapour
         ftp.FtpSource(
             'ftp.cdc.noaa.gov',
             source_dir='/Datasets/ncep.reanalysis/surface',
             name_pattern='pr_wtr.eatm.[0-9]{4}.nc',
             target_dir='/tmp/anc/vapour'
         ),
+        # GDAS and forecast
         http.DateRangeSource(
             http.HttpListingSource(
                 source_url='',
@@ -117,6 +125,11 @@ def load_modules():
             ),
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
             target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}'
+        ),
+        # LUTS
+        http.HttpListingSource(
+            source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
+            target_dir='/tmp/anc/luts'
         )
     ]
 

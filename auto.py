@@ -117,9 +117,12 @@ def load_modules():
             target_dir='/tmp/anc/vapour'
         ),
         # GDAS and forecast
+        # Download a date range of 3 days
         http.DateRangeSource(
             http.HttpListingSource(
+                # Added via the date range pattern
                 source_url='',
+                # Added via the date range pattern
                 target_dir='',
                 # Match three file types:
                 #    gdas1.pgrb00.1p0deg.20110617_12_000.grib2

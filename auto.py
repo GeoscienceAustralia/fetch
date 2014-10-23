@@ -107,6 +107,16 @@ def load_modules():
             source_dir='/Datasets/ncep.reanalysis/surface',
             name_pattern='pr_wtr.eatm.[0-9]{4}.nc',
             target_dir='/tmp/anc/vapour'
+        ),
+        http.DateRangeSource(
+            http.HttpListingSource(
+                source_url='',
+                target_dir='',
+
+                listing_name_filter='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
+            ),
+            source_url='http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
+            target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}'
         )
     ]
 

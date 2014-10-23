@@ -9,6 +9,7 @@ from contextlib import closing
 import feedparser
 from lxml import etree
 from urlparse import urljoin
+import datetime
 
 from . import DataSource, fetch_file
 
@@ -37,6 +38,7 @@ def _fetch_file(target_dir, target_name, reporter, url, override_existing=False,
     :type reporter: FetchReporter
     :type url: str
     """
+
     def do_fetch(t):
         """Fetch data to filename t"""
         with closing(requests.get(url, stream=True)) as res:
@@ -92,6 +94,53 @@ class HttpSource(DataSource):
             _fetch_file(self.target_dir, name, reporter, url, override_existing=True)
 
 
+def _date_range(from_days, to_days):
+    """
+
+    :type from_days: int
+    :type to_days: int
+    :rtype: list od datetime.datetime
+    """
+    start_day = datetime.datetime.utcnow() + datetime.timedelta(days=from_days)
+    days = to_days - from_days
+
+    for day in (start_day + datetime.timedelta(days=n) for n in range(days + 1)):
+        yield day
+
+
+class DateRangeSource(DataSource):
+    def __init__(self, source_prototype, source_url=None, target_dir=None, from_days=-1, to_days=1):
+        super(DateRangeSource, self).__init__()
+        self.source_url = source_url
+        self.target_dir = target_dir
+
+        #: :type: DataSource
+        self.source_prototype = source_prototype
+
+        self.from_days = from_days
+        self.to_days = to_days
+
+    def trigger(self, reporter):
+        for day in _date_range(self.from_days, self.to_days):
+            date_params = {
+                'year': day.strftime('%Y'),
+                'month': day.strftime('%m'),
+                'day': day.strftime('%d'),
+                'julday': day.strftime('%j')
+            }
+
+            if self.source_url:
+                self.source_prototype.source_url = self.source_url.format(**date_params)
+                _log.debug('Source URL %r', self.source_prototype.source_url)
+
+            if self.target_dir:
+                self.source_prototype.target_dir = self.target_dir.format(**date_params)
+                _log.debug('Target dir %r', self.source_prototype.target_dir)
+
+            _log.info('Triggering %r', self.source_prototype)
+            self.source_prototype.trigger(reporter)
+
+
 class HttpListingSource(DataSource):
     """
     Fetch files from a HTTP listing page.
@@ -99,10 +148,10 @@ class HttpListingSource(DataSource):
     A pattern can be supplied to limit files by filename.
     """
 
-    def __init__(self, listing_url, target_dir, listing_name_filter='.*', filename_transform=None):
+    def __init__(self, source_url, target_dir, listing_name_filter='.*', filename_transform=None):
         super(HttpListingSource, self).__init__()
 
-        self.listing_url = listing_url
+        self.source_url = source_url
         self.listing_name_filter = listing_name_filter
         self.target_dir = target_dir
         self.filename_transform = filename_transform
@@ -111,10 +160,10 @@ class HttpListingSource(DataSource):
         """
         Download the given listing page, and any links that match the name pattern.
         """
-        res = requests.get(self.listing_url)
+        res = requests.get(self.source_url)
         if res.status_code != 200:
             _log.debug('Received text %r', res.text)
-            reporter.file_error(self.listing_url, "Status code %r" % res.status_code)
+            reporter.file_error(self.source_url, "Status code %r" % res.status_code)
             return
 
         page = etree.fromstring(res.text, parser=etree.HTMLParser())

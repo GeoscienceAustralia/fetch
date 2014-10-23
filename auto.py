@@ -66,38 +66,40 @@ def load_modules():
     """
     # Hard-code the modules for now.
     # TODO: Load dynamically.
+    anc_data = '/tmp/anc'
     return [
         # LS5 CPF
         http.RssSource(
             'https://landsat.usgs.gov/L5CPFRSS.rss',
-            '/tmp/anc/ls5-cpf'
+            anc_data + 'sensor-specific/LANDSAT5/CalibrationParameterFile'
         ),
         # LS7 CPF
         http.RssSource(
             'http://landsat.usgs.gov/L7CPFRSS.rss',
-            '/tmp/anc/ls7-cpf'
+            anc_data + 'sensor-specific/LANDSAT7/CalibrationParameterFile'
         ),
         # LS8 CPF
         http.RssSource(
             'http://landsat.usgs.gov/cpf.rss',
-            '/tmp/anc/ls8-cpf'
+            anc_data + 'sensor-specific/LANDSAT8/CalibrationParameterFile'
         ),
         # LS8 BPF
         http.RssSource(
             'http://landsat.usgs.gov/bpf.rss',
-            '/tmp/anc/ls8-bpf/{year}/{month}',
+            anc_data + 'sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}',
             filename_transform=RegexpOutputPathTransform(
                 # Extract year and month from filenames to use in destination directory
                 'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
-            )
+            ),
+
         ),
         # Landsat 8 TLE
         http.RssSource(
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
-            '/tmp/anc/ls8-tle/{year}',
+            anc_data + 'sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
             filename_transform=RegexpOutputPathTransform(
                 # Extract year from the filename to use in the output directory.
-                #     Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
+                # Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
                 '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
             )
         ),
@@ -107,16 +109,16 @@ def load_modules():
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
                 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
             ],
-            '/tmp/anc',
+            anc_data + 'sensor-specific/MODIS/',
         ),
         # Water vapour
         ftp.FtpListingSource(
             'ftp.cdc.noaa.gov',
             source_dir='/Datasets/ncep.reanalysis/surface',
             name_pattern='pr_wtr.eatm.[0-9]{4}.nc',
-            target_dir='/tmp/anc/vapour'
+            target_dir=anc_data + 'water_vapour/source'
         ),
-        # GDAS and forecast
+        # NPP GDAS and forecast
         # Download a date range of 3 days
         http.DateRangeSource(
             http.HttpListingSource(
@@ -125,13 +127,13 @@ def load_modules():
                 # Added via the date range pattern
                 target_dir='',
                 # Match three file types:
-                #    gdas1.pgrb00.1p0deg.20110617_12_000.grib2
-                #    NISE_SSMISF17_20110617.HDFEOS
+                # gdas1.pgrb00.1p0deg.20110617_12_000.grib2
+                # NISE_SSMISF17_20110617.HDFEOS
                 #    gfs.press_gr.0p5deg_pt.20110617_00_003.npoess.grib2
                 listing_name_filter='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
             ),
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
-            target_dir='/tmp/anc/gdas/{year}_{month}_{day}_{julday}',
+            target_dir=anc_data + 'sensor-specific/NPP/VIIRS/CSPP/anc/cache/{year}_{month}_{day}_{julday}',
             # Repeat between 1 day ago to 1 day in the future:
             from_days=-1,
             to_days=1,
@@ -139,7 +141,7 @@ def load_modules():
         # LUTS
         http.HttpListingSource(
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
-            target_dir='/tmp/anc/luts',
+            target_dir=anc_data + 'sensor-specific/NPP/VIIRS/CSPP/anc/cache/luts',
         ),
         # Modis TLE
         ftp.FtpSource(
@@ -147,11 +149,19 @@ def load_modules():
             source_paths=[
                 '/ancillary/ephemeris/tle/drl.tle',
                 '/ancillary/ephemeris/tle/norad.tle',
+            ],
+            # Prepend the current date to the output filename
+            filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}'),
+            target_dir=anc_data + '/sensor-specific/MODIS/tle',
+        ),
+        ftp.FtpSource(
+            hostname='is.sci.gsfc.nasa.gov',
+            source_paths=[
                 '/ancillary/ephemeris/tle/noaa/noaa.tle',
             ],
             # Prepend the current date to the output filename
             filename_transform=DateFilenameTransform('{year}{month}{day}.{filename}'),
-            target_dir='/tmp/anc/tle',
+            target_dir=anc_data + '/sensor-specific/NOAA/tle',
         )
     ]
 

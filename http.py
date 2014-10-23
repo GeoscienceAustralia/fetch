@@ -9,7 +9,6 @@ from contextlib import closing
 import feedparser
 from lxml import etree
 from urlparse import urljoin
-import datetime
 
 from . import DataSource, fetch_file
 

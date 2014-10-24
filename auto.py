@@ -69,21 +69,27 @@ def load_modules():
     anc_data = '/tmp/anc'
     return [
         # LS5 CPF
+        #   -> Hourly
         http.RssSource(
             'https://landsat.usgs.gov/L5CPFRSS.rss',
             anc_data + '/sensor-specific/LANDSAT5/CalibrationParameterFile'
         ),
         # LS7 CPF
+        #   -> Hourly
         http.RssSource(
             'http://landsat.usgs.gov/L7CPFRSS.rss',
             anc_data + '/sensor-specific/LANDSAT7/CalibrationParameterFile'
         ),
         # LS8 CPF
+        #   -> Hourly
+        #      */30 * 1 1,4,7,10 *
         http.RssSource(
             'http://landsat.usgs.gov/cpf.rss',
             anc_data + '/sensor-specific/LANDSAT8/CalibrationParameterFile'
         ),
         # LS8 BPF
+        #   -> Avail. 2-4 hours after acquisition
+        #      */15 * * * *
         http.RssSource(
             'http://landsat.usgs.gov/bpf.rss',
             anc_data + '/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}',
@@ -94,6 +100,7 @@ def load_modules():
 
         ),
         # Landsat 8 TLE
+        #   -> Hourly
         http.RssSource(
             'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
             anc_data + '/sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
@@ -112,6 +119,7 @@ def load_modules():
             anc_data + '/sensor-specific/MODIS/',
         ),
         # Water vapour
+        #   -> 0 1 * * *
         ftp.FtpListingSource(
             'ftp.cdc.noaa.gov',
             source_dir='/Datasets/ncep.reanalysis/surface',
@@ -120,6 +128,7 @@ def load_modules():
         ),
         # NPP GDAS and forecast
         # Download a date range of 3 days
+        #   -> * */2 * * *
         DateRangeSource(
             http.HttpListingSource(
                 # Added via the date range pattern
@@ -141,11 +150,13 @@ def load_modules():
             to_days=1,
         ),
         # LUTS
+        #   -> 0 16 25 * *
         http.HttpListingSource(
             source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
             target_dir=anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/luts',
         ),
         # Modis TLE
+        #   -> * 0-23/2 * * *
         ftp.FtpSource(
             hostname='is.sci.gsfc.nasa.gov',
             source_paths=[
@@ -166,6 +177,7 @@ def load_modules():
             target_dir=anc_data + '/sensor-specific/NOAA/tle',
         ),
         # Modis GDAS
+        #   -> * 0-23/2 * * *
         DateRangeSource(
             ftp.FtpListingSource(
                 hostname='ftp.ssec.wisc.edu',
@@ -183,6 +195,7 @@ def load_modules():
             to_days=1
         ),
         # Modis GFS
+        #   -> * 0-23/2 * * *
         DateRangeSource(
             ftp.FtpListingSource(
                 hostname='ftp.ssec.wisc.edu',
@@ -200,6 +213,7 @@ def load_modules():
             to_days=1
         ),
         # Modis Att & Ephem
+        #   -> 20 */2 * * *
         DateRangeSource(
             http.HttpListingSource(
                 # Added via the date range pattern
@@ -216,6 +230,7 @@ def load_modules():
             to_days=0,
         ),
         # BRDF from NCI
+        #   -> 0 9 * * 6
         RsyncMirrorSource(
             source_path='/g/data1/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*',
             source_host='lpgs@r-dm.nci.org.au',

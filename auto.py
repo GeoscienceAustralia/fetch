@@ -10,7 +10,7 @@ complicated scripts with a single, central configuration file.
 import logging
 import sys
 
-from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform
+from . import http, ftp, DataSource, FetchReporter, RegexpOutputPathTransform, RsyncMirrorSource
 from onreceipt.fetch import DateFilenameTransform, DateRangeSource
 
 
@@ -214,6 +214,11 @@ def load_modules():
             },
             from_days=-3,
             to_days=0,
+        ),
+        RsyncMirrorSource(
+            source_path='/g/data1/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*',
+            target_path=anc_data + '/BRDF/CSIRO_mosaic',
+            source_host='lpgs@r-dm.nci.org.au',
         )
     ]
 

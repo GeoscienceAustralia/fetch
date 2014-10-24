@@ -2,6 +2,7 @@
 A package for automatically fetching files (eg. Ancillary).
 """
 import datetime
+from neocommon import files
 import os
 import re
 import logging
@@ -257,11 +258,42 @@ def _date_range(from_days_from_now, to_days_from_now):
         yield day
 
 
+class RsyncMirrorSource(DataSource):
+    """
+    Perform a transfer between machines.
+
+    Currently uses rsync and assumes no authentication is required between the machines
+    (ie. public key pairs are configured).
+    """
+    def __init__(self, source_path, target_path, source_host=None, target_host=None):
+        """
+        Hostnames are optional, defaulting to the current machine.
+
+        :type source_path: str
+        :type target_path: str
+        :type source_host: str or None
+        :type target_host: str on None
+        """
+        super(RsyncMirrorSource, self).__init__()
+        self.source_host = source_host
+        self.target_host = target_host
+        self.source_path = source_path
+        self.target_path = target_path
+
+    def trigger(self, reporter):
+        transferred_files = files.rsync(
+            self.source_path,
+            self.target_path,
+            source_host=self.source_host,
+            destination_host=self.target_host
+        )
+        # TODO: We'll eventually track/announce newly arriving files.
+        _log.debug('Transferred: %r', transferred_files)
+
+
 class DateRangeSource(DataSource):
     """
     Repeat a source multiple times with different dates.
-
-
     """
 
     def __init__(self, source_prototype, overridden_properties, from_days=-1, to_days=1):

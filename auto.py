@@ -227,8 +227,11 @@ def _run():
     """
     Fetch each configured ancillary file.
     """
-    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s",
-                        stream=sys.stderr, level=logging.WARNING)
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        stream=sys.stderr,
+        level=logging.WARNING
+    )
     _log.setLevel(logging.DEBUG)
     logging.getLogger('onreceipt').setLevel(logging.DEBUG)
 

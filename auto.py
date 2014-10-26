@@ -46,9 +46,9 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-def schedule_module(cron_pattern, scheduled, module, now):
+def schedule_module(cron_pattern, scheduled, name, module, now):
     next_trigger = croniter(cron_pattern, start_time=now).get_next()
-    heapq.heappush(scheduled, (next_trigger, cron_pattern, module))
+    heapq.heappush(scheduled, (next_trigger, name, cron_pattern, module))
     return next_trigger
 
 
@@ -60,7 +60,7 @@ def schedule_modules():
 
     for name, (cron_pattern, module) in load_modules().iteritems():
         now = time.time()
-        schedule_module(cron_pattern, scheduled, module, now)
+        schedule_module(cron_pattern, scheduled, name, module, now)
 
     return scheduled
 
@@ -262,9 +262,9 @@ def load_modules():
     }
 
 
-def run_module(reporter, module):
+def run_module(reporter, name, module):
+    setproctitle('fetch %s' % name)
     set_signals(enabled=False)
-    setproctitle('%r' % module)
     _log.info('Running %s: %r', DataSource.__name__, module)
 
     try:
@@ -275,12 +275,13 @@ def run_module(reporter, module):
         _log.exception('Module %r failure', module)
 
 
-def spawn_module(reporter, module):
-    _log.info('Spawning %r', module)
+def spawn_module(reporter, name, module):
+    _log.info('Spawning %s', name)
+    _log.debug('Spawning %r', module)
     p = multiprocessing.Process(
         target=run_module,
-        name='%r' % module,
-        args=(reporter, module)
+        name='fetch %s' % name,
+        args=(reporter, name, module)
     )
     p.start()
     return p
@@ -329,27 +330,27 @@ def run_loop():
 
         now = time.time()
 
-        next_time, cron_pattern, module = _scheduled_items[0]
+        next_time, name, cron_pattern, module = _scheduled_items[0]
 
         if next_time < now:
             # Pop
-            next_time, cron_pattern, module = heapq.heappop(_scheduled_items)
+            next_time, name, cron_pattern, module = heapq.heappop(_scheduled_items)
 
             # Execute
-            spawn_module(reporter, module)
+            spawn_module(reporter, name, module)
 
             # Schedule next time
-            next_trigger = schedule_module(cron_pattern, _scheduled_items, module, now)
+            next_trigger = schedule_module(cron_pattern, _scheduled_items, name, module, now)
 
-            _log.debug('Next trigger in %r seconds', now - next_trigger)
+            _log.debug('Next trigger in %r seconds', next_trigger - now)
         else:
             # Sleep until time
-            sleep_seconds = next_time - now
+            sleep_seconds = (next_time - now) + 0.1
             _log.debug('Sleeping for %r seconds, until action %r', sleep_seconds, module)
             time.sleep(sleep_seconds)
 
     # TODO: Do something about error return codes from children?
-    _log.info('%r children', len(multiprocessing.active_children()))
+    _log.info('Shutting down. Joining %r children', len(multiprocessing.active_children()))
     for p in multiprocessing.active_children():
         p.join()
 

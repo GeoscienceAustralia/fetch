@@ -304,10 +304,11 @@ class ScheduledItem(object):
         self.module = module
 
 
-def trigger_reload():
+def reload_modules():
     _log.info('Reloading modules...')
     global _scheduled_items
     _scheduled_items = schedule_modules(load_modules())
+    _log.debug('%s modules loaded', len(_scheduled_items))
 
 
 def trigger_exit(signal, frame):
@@ -317,6 +318,10 @@ def trigger_exit(signal, frame):
 
 
 def set_signals(enabled=True):
+
+    def trigger_reload(signal, frame):
+        reload_modules()
+
     # For a SIGINT signal (Ctrl-C) or SIGTERM signal (`kill <pid>` command), we start a graceful shutdown.
     signal.signal(signal.SIGINT, trigger_exit if enabled else signal.SIG_DFL)
     signal.signal(signal.SIGTERM, trigger_exit if enabled else signal.SIG_DFL)
@@ -329,12 +334,15 @@ def run_loop():
     set_signals()
     reporter = _PrintReporter()
 
-    trigger_reload()
+    reload_modules()
 
     global _scheduled_items
 
     while not should_exit:
-        _log.info('%r children', len(multiprocessing.active_children()))
+        # active_children() also cleans up zombie subprocesses.
+        child_count = len(multiprocessing.active_children())
+
+        _log.debug('%r children', child_count)
 
         if not _scheduled_items:
             _log.info('No scheduled items. Sleeping.')
@@ -347,19 +355,18 @@ def run_loop():
         next_time, scheduled_item = _scheduled_items[0]
 
         if next_time < now:
-            # Pop
+            # Trigger time has passed, so let's run it.
+
             #: :type: (int, ScheduledItem)
             next_time, scheduled_item = heapq.heappop(_scheduled_items)
-
-            # Execute
             spawn_module(reporter, scheduled_item.name, scheduled_item.module)
 
-            # Schedule next time
+            # Schedule next run for this module
             next_trigger = schedule_module(_scheduled_items, now, scheduled_item)
 
             _log.debug('Next trigger in %.1s seconds', next_trigger - now)
         else:
-            # Sleep until time
+            # Sleep until next action is ready.
             sleep_seconds = (next_time - now) + 0.1
             _log.debug('Sleeping for %.1sm, until action %r', sleep_seconds / 60.0, scheduled_item.name)
             time.sleep(sleep_seconds)

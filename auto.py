@@ -46,21 +46,27 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-def schedule_module(cron_pattern, scheduled, name, module, now):
-    next_trigger = croniter(cron_pattern, start_time=now).get_next()
-    heapq.heappush(scheduled, (next_trigger, name, cron_pattern, module))
+def schedule_module(scheduled, now, item):
+    """
+
+    :type scheduled: list of (float, ScheduledItem)
+    :param now: float
+    :param item: ScheduledItem
+    :return:
+    """
+    next_trigger = croniter(item.cron_pattern, start_time=now).get_next()
+    heapq.heappush(scheduled, (next_trigger, item))
     return next_trigger
 
 
-def schedule_modules():
+def schedule_modules(modules):
     """
     :type modules: dict of (str, (str, DataSource))
     """
     scheduled = []
-
-    for name, (cron_pattern, module) in load_modules().iteritems():
-        now = time.time()
-        schedule_module(cron_pattern, scheduled, name, module, now)
+    now = time.time()
+    for name, (cron_pattern, module) in modules.iteritems():
+        schedule_module(scheduled, now, ScheduledItem(name, cron_pattern, module))
 
     return scheduled
 
@@ -290,10 +296,18 @@ should_exit = False
 _scheduled_items = []
 
 
+class ScheduledItem(object):
+    def __init__(self, name, cron_pattern, module):
+        super(ScheduledItem, self).__init__()
+        self.name = name
+        self.cron_pattern = cron_pattern
+        self.module = module
+
+
 def trigger_reload():
     _log.info('Reloading modules...')
     global _scheduled_items
-    _scheduled_items = schedule_modules()
+    _scheduled_items = schedule_modules(load_modules())
 
 
 def trigger_exit(signal, frame):
@@ -307,7 +321,6 @@ def set_signals(enabled=True):
     signal.signal(signal.SIGINT, trigger_exit if enabled else signal.SIG_DFL)
     signal.signal(signal.SIGTERM, trigger_exit if enabled else signal.SIG_DFL)
     signal.signal(signal.SIGHUP, trigger_reload if enabled else signal.SIG_DFL)
-
 
 def run_loop():
     global should_exit
@@ -330,23 +343,25 @@ def run_loop():
 
         now = time.time()
 
-        next_time, name, cron_pattern, module = _scheduled_items[0]
+        #: :type: (int, ScheduledItem)
+        next_time, scheduled_item = _scheduled_items[0]
 
         if next_time < now:
             # Pop
-            next_time, name, cron_pattern, module = heapq.heappop(_scheduled_items)
+            #: :type: (int, ScheduledItem)
+            next_time, scheduled_item = heapq.heappop(_scheduled_items)
 
             # Execute
-            spawn_module(reporter, name, module)
+            spawn_module(reporter, scheduled_item.name, scheduled_item.module)
 
             # Schedule next time
-            next_trigger = schedule_module(cron_pattern, _scheduled_items, name, module, now)
+            next_trigger = schedule_module(_scheduled_items, now, scheduled_item)
 
-            _log.debug('Next trigger in %r seconds', next_trigger - now)
+            _log.debug('Next trigger in %.1s seconds', next_trigger - now)
         else:
             # Sleep until time
             sleep_seconds = (next_time - now) + 0.1
-            _log.debug('Sleeping for %r seconds, until action %r', sleep_seconds, module)
+            _log.debug('Sleeping for %.1sm, until action %r', sleep_seconds / 60.0, scheduled_item.name)
             time.sleep(sleep_seconds)
 
     # TODO: Do something about error return codes from children?

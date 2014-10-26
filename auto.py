@@ -18,6 +18,7 @@ import signal
 from onreceipt.fetch import DateFilenameTransform, DateRangeSource
 
 from croniter import croniter
+from setproctitle import setproctitle
 
 PROCESS_EXIT_WAIT = 900
 
@@ -45,10 +46,10 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-
 def schedule_module(cron_pattern, scheduled, module, now):
     next_trigger = croniter(cron_pattern, start_time=now).get_next()
     heapq.heappush(scheduled, (next_trigger, cron_pattern, module))
+    return next_trigger
 
 
 def schedule_modules():
@@ -139,7 +140,7 @@ def load_modules():
             )
         ),
         'NPP GDAS/forecast': (
-            '* */2 * * *',
+            '58 */2 * * *',
             DateRangeSource(
                 # Download a date range of 3 days
                 http.HttpListingSource(
@@ -195,7 +196,7 @@ def load_modules():
             )
         ),
         'Modis GDAS': (
-            '* 0-23/2 * * *',
+            '3 0-23/2 * * *',
             DateRangeSource(
                 ftp.FtpListingSource(
                     hostname='ftp.ssec.wisc.edu',
@@ -214,7 +215,7 @@ def load_modules():
             )
         ),
         'Modis GFS': (
-            '* 0-23/2 * * *',
+            '53 0-23/2 * * *',
             DateRangeSource(
                 ftp.FtpListingSource(
                     hostname='ftp.ssec.wisc.edu',
@@ -262,6 +263,8 @@ def load_modules():
 
 
 def run_module(reporter, module):
+    set_signals(enabled=False)
+    setproctitle('%r' % module)
     _log.info('Running %s: %r', DataSource.__name__, module)
 
     try:
@@ -273,6 +276,7 @@ def run_module(reporter, module):
 
 
 def spawn_module(reporter, module):
+    _log.info('Spawning %r', module)
     p = multiprocessing.Process(
         target=run_module,
         name='%r' % module,
@@ -281,50 +285,73 @@ def spawn_module(reporter, module):
     p.start()
     return p
 
+should_exit = False
+_scheduled_items = []
+
+
+def trigger_reload():
+    _log.info('Reloading modules...')
+    global _scheduled_items
+    _scheduled_items = schedule_modules()
+
+
+def trigger_exit(signal, frame):
+    _log.info('Should exit')
+    global should_exit
+    should_exit = True
+
+
+def set_signals(enabled=True):
+    # For a SIGINT signal (Ctrl-C) or SIGTERM signal (`kill <pid>` command), we start a graceful shutdown.
+    signal.signal(signal.SIGINT, trigger_exit if enabled else signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, trigger_exit if enabled else signal.SIG_DFL)
+    signal.signal(signal.SIGHUP, trigger_reload if enabled else signal.SIG_DFL)
+
 
 def run_loop():
-
+    global should_exit
     should_exit = False
 
-    def signal_exit(signal, frame):
-        global should_exit
-        should_exit = True
-
-    # For a SIGINT signal (Ctrl-C) or SIGTERM signal (`kill <pid>` command), we start a graceful shutdown.
-    signal.signal(signal.SIGINT, signal_exit)
-    signal.signal(signal.SIGTERM, signal_exit)
-
+    set_signals()
     reporter = _PrintReporter()
 
-    scheduled = schedule_modules()
-    executing_procs = []
+    trigger_reload()
+
+    global _scheduled_items
 
     while not should_exit:
-        executing_procs = [p for p in executing_procs if p.is_alive()]
-        _log.info('%s procs running', len(executing_procs))
+        _log.info('%r children', len(multiprocessing.active_children()))
+
+        if not _scheduled_items:
+            _log.info('No scheduled items. Sleeping.')
+            time.sleep(500)
+            continue
 
         now = time.time()
 
-        next_time, cron_pattern, module = scheduled[0]
+        next_time, cron_pattern, module = _scheduled_items[0]
 
         if next_time < now:
             # Pop
-            next_time, cron_pattern, module = heapq.heappop(scheduled)
+            next_time, cron_pattern, module = heapq.heappop(_scheduled_items)
 
             # Execute
-            p = spawn_module(reporter, module)
-            executing_procs.append(p)
+            spawn_module(reporter, module)
 
             # Schedule next time
-            schedule_module(cron_pattern, scheduled, module, now)
+            next_trigger = schedule_module(cron_pattern, _scheduled_items, module, now)
+
+            _log.debug('Next trigger in %r seconds', now - next_trigger)
         else:
             # Sleep until time
-            sleep_seconds = (next_time - now).seconds
-            _log.debug('Sleeping for %r seconds', sleep_seconds)
+            sleep_seconds = next_time - now
+            _log.debug('Sleeping for %r seconds, until action %r', sleep_seconds, module)
             time.sleep(sleep_seconds)
 
-    for proc in executing_procs:
-        proc.join(timeout=PROCESS_EXIT_WAIT)
+    # TODO: Do something about error return codes from children?
+    _log.info('%r children', len(multiprocessing.active_children()))
+    for p in multiprocessing.active_children():
+        p.join()
 
 
 def _run():

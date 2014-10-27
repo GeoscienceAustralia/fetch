@@ -13,6 +13,7 @@ import heapq
 import time
 import multiprocessing
 import signal
+from mock import Mock
 
 from . import DataSource, FetchReporter
 from croniter import croniter
@@ -25,7 +26,7 @@ _log = logging.getLogger(__name__)
 
 class _PrintReporter(FetchReporter):
     """
-    Send events to the log.
+    Print events to the log.
     """
 
     def file_complete(self, uri, name, path):
@@ -131,7 +132,7 @@ def _on_child_finish(child):
         _log.error('Error return code %s from %r', exit_code, child.name)
 
 
-def filter_finished_children(running_children):
+def _filter_finished_children(running_children):
     """
     Filter and check the exit codes of finished children.
 
@@ -188,7 +189,7 @@ def run_loop():
     running_children = set()
 
     while not o.exiting:
-        running_children = filter_finished_children(running_children)
+        running_children = _filter_finished_children(running_children)
 
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())
@@ -223,6 +224,7 @@ def run_loop():
             _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, next_item.name)
             time.sleep(sleep_seconds)
 
+    # Shut down -- Join all children.
     all_children = running_children.union(multiprocessing.active_children())
     _log.info('Shutting down. Joining %r children', len(all_children))
     for p in all_children:

@@ -215,7 +215,7 @@ def fetch_file(uri,
     target_path = os.path.join(target_dir, target_filename)
 
     if os.path.exists(target_path) and not override_existing:
-        _log.info('Path exists %r. Skipping', target_path)
+        _log.debug('Path exists %r. Skipping', target_path)
         return
 
     t = None

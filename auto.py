@@ -17,24 +17,10 @@ import signal
 from . import DataSource, FetchReporter
 from croniter import croniter
 from setproctitle import setproctitle
-from onreceipt.fetch.load import load_modules
+from onreceipt.fetch.load import load_schedule
 
 
 _log = logging.getLogger(__name__)
-
-
-class ScheduledItem(object):
-    """
-    Scheduling information for a module.
-    :type name: str
-    :type cron_pattern: str
-    :type module: DataSource
-    """
-    def __init__(self, name, cron_pattern, module):
-        super(ScheduledItem, self).__init__()
-        self.name = name
-        self.cron_pattern = cron_pattern
-        self.module = module
 
 
 class _PrintReporter(FetchReporter):
@@ -58,27 +44,27 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-def schedule_module(scheduled, now, item):
+def _schedule_item(schedule, now, item):
     """
 
-    :type scheduled: list of (float, ScheduledItem)
+    :type schedule: list of (float, ScheduledItem)
     :param now: float
     :param item: ScheduledItem
     :return:
     """
     next_trigger = croniter(item.cron_pattern, start_time=now).get_next()
-    heapq.heappush(scheduled, (next_trigger, item))
+    heapq.heappush(schedule, (next_trigger, item))
     return next_trigger
 
 
-def schedule_modules(modules):
+def _build_schedule(items):
     """
-    :type modules: dict of (str, (str, DataSource))
+    :type items: list of ScheduledItem
     """
     scheduled = []
     now = time.time()
-    for name, (cron_pattern, module) in modules.iteritems():
-        schedule_module(scheduled, now, ScheduledItem(name, cron_pattern, module))
+    for scheduled_item in items:
+        _schedule_item(scheduled, now, scheduled_item)
 
     return scheduled
 
@@ -92,7 +78,7 @@ def _run_module(reporter, name, module):
     :return:
     """
     setproctitle('fetch %s' % name)
-    set_signals()
+    _init_signals()
     _log.info('Triggering %s: %r', DataSource.__name__, module)
     module.trigger(reporter)
 
@@ -114,7 +100,7 @@ def _spawn_run_process(reporter, name, module):
     return p
 
 
-def set_signals(trigger_exit=None, trigger_reload=None):
+def _init_signals(trigger_exit=None, trigger_reload=None):
     """Set signal handlers
     :param trigger_reload: Handler for reload
     :type trigger_exit: Handler for exit
@@ -139,15 +125,15 @@ def run_loop():
         """
         def __init__(self):
             self.exiting = False
-            self.scheduled_items = []
+            self.schedule = []
 
     o = RunState()
 
     def _reload_config():
         """Reload configuration."""
         _log.info('Reloading configuration...')
-        o.scheduled_items = schedule_modules(load_modules())
-        _log.debug('%s modules loaded', len(o.scheduled_items))
+        o.schedule = _build_schedule(load_schedule())
+        _log.debug('%s modules loaded', len(o.schedule))
 
     def trigger_exit(signal_, frame_):
         """Start a graceful shutdown"""
@@ -158,7 +144,7 @@ def run_loop():
         _reload_config()
 
     _reload_config()
-    set_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
+    _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     reporter = _PrintReporter()
 
@@ -168,7 +154,7 @@ def run_loop():
 
         _log.debug('%r children', child_count)
 
-        if not o.scheduled_items:
+        if not o.schedule:
             _log.info('No scheduled items. Sleeping.')
             time.sleep(500)
             continue
@@ -176,23 +162,23 @@ def run_loop():
         now = time.time()
 
         # : :type: (int, ScheduledItem)
-        next_time, scheduled_item = o.scheduled_items[0]
+        next_time, next_item = o.schedule[0]
 
         if next_time < now:
             # Trigger time has passed, so let's run it.
 
             #: :type: (int, ScheduledItem)
-            next_time, scheduled_item = heapq.heappop(o.scheduled_items)
-            _spawn_run_process(reporter, scheduled_item.name, scheduled_item.module)
+            next_time, next_item = heapq.heappop(o.schedule)
+            _spawn_run_process(reporter, next_item.name, next_item.module)
 
             # Schedule next run for this module
-            next_trigger = schedule_module(o.scheduled_items, now, scheduled_item)
+            next_trigger = _schedule_item(o.schedule, now, next_item)
 
             _log.debug('Next trigger in %.1f minutes', next_trigger - now)
         else:
             # Sleep until next action is ready.
             sleep_seconds = (next_time - now) + 0.1
-            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, scheduled_item.name)
+            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, next_item.name)
             time.sleep(sleep_seconds)
 
     # TODO: Do something about error return codes from children?

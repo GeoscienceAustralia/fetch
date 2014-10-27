@@ -1,41 +1,64 @@
-from onreceipt.fetch import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource
+"""
+Logic to load configuration.
 
-__author__ = 'u63606'
+"""
+from . import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
+    RsyncMirrorSource, DataSource
 
 
-def load_modules():
+class ScheduledItem(object):
     """
-    Load the rules for fetching.
+    Scheduling information for a module.
+    :type name: str
+    :type cron_pattern: str
+    :type module: DataSource
+    """
+
+    def __init__(self, name, cron_pattern, module):
+        super(ScheduledItem, self).__init__()
+        self.name = name
+        self.cron_pattern = cron_pattern
+        self.module = module
+
+
+def load_schedule():
+    """
+    Load the download rules.
 
     In the future this will come from an external text/YAML/JSON file.
+    
+    :rtype: list of ScheduledItem
     """
     # Hard-code the modules for now.
     # TODO: Load dynamically.
     anc_data = '/tmp/anc'
-    return {
-        'LS5 CPF': (
+    return [
+        ScheduledItem(
+            'LS5 CPF',
             '0 * * * *',
             http.RssSource(
                 'https://landsat.usgs.gov/L5CPFRSS.rss',
                 anc_data + '/sensor-specific/LANDSAT5/CalibrationParameterFile'
             )
         ),
-        'LS7 CPF': (
+        ScheduledItem(
+            'LS7 CPF',
             '10 * * * *',
             http.RssSource(
                 'http://landsat.usgs.gov/L7CPFRSS.rss',
                 anc_data + '/sensor-specific/LANDSAT7/CalibrationParameterFile'
             )
         ),
-        'LS8 CPF': (
+        ScheduledItem(
+            'LS8 CPF',
             '*/30 * 1 1,4,7,10 *',
             http.RssSource(
                 'http://landsat.usgs.gov/cpf.rss',
                 anc_data + '/sensor-specific/LANDSAT8/CalibrationParameterFile'
             )
         ),
-        'LS8 BPF': (
+        ScheduledItem(
+            'LS8 BPF',
             '*/15 * * * *',
             # -> Avail. 2-4 hours after acquisition
             http.RssSource(
@@ -48,18 +71,21 @@ def load_modules():
 
             )
         ),
-        'LS8 TLE': ('20 * * * *',
-                    http.RssSource(
-                        'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
-                        anc_data + '/sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
-                        filename_transform=RegexpOutputPathTransform(
-                            # Extract year from the filename to use in the output directory.
-                            # Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
-                            '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
-                        )
-                    )
+        ScheduledItem(
+            'LS8 TLE',
+            '20 * * * *',
+            http.RssSource(
+                'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
+                anc_data + '/sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
+                filename_transform=RegexpOutputPathTransform(
+                    # Extract year from the filename to use in the output directory.
+                    # Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
+                    '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
+                )
+            )
         ),
-        'Modis utcpole/leapsec': (
+        ScheduledItem(
+            'Modis utcpole-leapsec',
             '0 7 * * mon',
             http.HttpSource(
                 [
@@ -69,7 +95,8 @@ def load_modules():
                 anc_data + '/sensor-specific/MODIS/',
             )
         ),
-        'Water vapour': (
+        ScheduledItem(
+            'Water vapour',
             '0 1 * * *',
             ftp.FtpListingSource(
                 'ftp.cdc.noaa.gov',
@@ -78,7 +105,8 @@ def load_modules():
                 target_dir=anc_data + '/water_vapour/source'
             )
         ),
-        'NPP GDAS/forecast': (
+        ScheduledItem(
+            'NPP GDAS-forecast',
             '58 */2 * * *',
             DateRangeSource(
                 # Download a date range of 3 days
@@ -102,14 +130,16 @@ def load_modules():
                 to_days=1,
             )
         ),
-        'NPP LUTS': (
+        ScheduledItem(
+            'NPP LUTS',
             '0 16 25 * *',
             http.HttpListingSource(
                 source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
                 target_dir=anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/luts',
             )
         ),
-        'Modis TLE': (
+        ScheduledItem(
+            'Modis TLE',
             '30 0-23/2 * * *',
             ftp.FtpSource(
                 hostname='is.sci.gsfc.nasa.gov',
@@ -122,7 +152,8 @@ def load_modules():
                 target_dir=anc_data + '/sensor-specific/MODIS/tle',
             )
         ),
-        'NOAA TLE': (
+        ScheduledItem(
+            'NOAA TLE',
             '40 0-23/2 * * *',
             ftp.FtpSource(
                 hostname='is.sci.gsfc.nasa.gov',
@@ -134,7 +165,8 @@ def load_modules():
                 target_dir=anc_data + '/sensor-specific/NOAA/tle',
             )
         ),
-        'Modis GDAS': (
+        ScheduledItem(
+            'Modis GDAS',
             '3 0-23/2 * * *',
             DateRangeSource(
                 ftp.FtpListingSource(
@@ -153,7 +185,8 @@ def load_modules():
                 to_days=1
             )
         ),
-        'Modis GFS': (
+        ScheduledItem(
+            'Modis GFS',
             '53 0-23/2 * * *',
             DateRangeSource(
                 ftp.FtpListingSource(
@@ -172,7 +205,8 @@ def load_modules():
                 to_days=1
             )
         ),
-        'Modis Att & Ephem': (
+        ScheduledItem(
+            'Modis Att-Ephem',
             '20 */2 * * *',
             DateRangeSource(
                 http.HttpListingSource(
@@ -190,7 +224,8 @@ def load_modules():
                 to_days=0,
             )
         ),
-        'BRDF from NCI': (
+        ScheduledItem(
+            'BRDF from NCI',
             '0 9 * * 6',
             RsyncMirrorSource(
                 source_path='/g/data1/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*',
@@ -198,4 +233,4 @@ def load_modules():
                 target_path=anc_data + '/BRDF/CSIRO_mosaic',
             )
         )
-    }
+    ]

@@ -26,12 +26,14 @@ class DataSource(object):
 
     def trigger(self, reporter):
         """
-        Trigger download from the source.
+        Trigger a download from the source.
+
+        Abstract method
 
         :type reporter: FetchReporter
         :return:
         """
-        raise NotImplementedError("Trigger was not implemented")
+        raise NotImplementedError("Trigger was not overridden")
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)

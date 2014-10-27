@@ -23,27 +23,13 @@ from onreceipt.fetch.load import load_modules
 _log = logging.getLogger(__name__)
 
 
-should_exit = False
-_scheduled_items = []
-
-
-def _reload_config():
-    """
-    Reload configuration.
-    """
-    _log.info('Reloading configuration...')
-    global _scheduled_items
-    _scheduled_items = schedule_modules(load_modules())
-    _log.debug('%s modules loaded', len(_scheduled_items))
-
-
-def trigger_exit(signal, frame):
-    _log.info('Should exit')
-    global should_exit
-    should_exit = True
-
-
 class ScheduledItem(object):
+    """
+    Scheduling information for a module.
+    :type name: str
+    :type cron_pattern: str
+    :type module: DataSource
+    """
     def __init__(self, name, cron_pattern, module):
         super(ScheduledItem, self).__init__()
         self.name = name
@@ -106,7 +92,7 @@ def _run_module(reporter, name, module):
     :return:
     """
     setproctitle('fetch %s' % name)
-    set_signals(enabled=False)
+    set_signals()
     _log.info('Triggering %s: %r', DataSource.__name__, module)
     module.trigger(reporter)
 
@@ -128,58 +114,73 @@ def _spawn_run_process(reporter, name, module):
     return p
 
 
-def set_signals(enabled=True):
-    """Enable or disable signal handlers"""
-    def trigger_reload(signal, frame):
-        _reload_config()
-
+def set_signals(trigger_exit=None, trigger_reload=None):
+    """Set signal handlers
+    :param trigger_reload: Handler for reload
+    :type trigger_exit: Handler for exit
+    """
     # For a SIGINT signal (Ctrl-C) or SIGTERM signal (`kill <pid>` command), we start a graceful shutdown.
-    signal.signal(signal.SIGINT, trigger_exit if enabled else signal.SIG_DFL)
-    signal.signal(signal.SIGTERM, trigger_exit if enabled else signal.SIG_DFL)
+    signal.signal(signal.SIGINT, trigger_exit if trigger_exit else signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, trigger_exit if trigger_exit else signal.SIG_DFL)
 
     # SIGHUP triggers a reload of config (following conventions of many daemons).
-    signal.signal(signal.SIGHUP, trigger_reload if enabled else signal.SIG_DFL)
+    signal.signal(signal.SIGHUP, trigger_reload if trigger_reload else signal.SIG_DFL)
 
 
 def run_loop():
     """
     Main loop
     """
-    global should_exit
-    should_exit = False
+    o = object()
+    o.should_exit = False
+    o.scheduled_items = []
 
-    set_signals()
+    def _reload_config():
+        """Reload configuration."""
+        _log.info('Reloading configuration...')
+        o.scheduled_items = schedule_modules(load_modules())
+        _log.debug('%s modules loaded', len(o.scheduled_items))
+
+    def trigger_exit(signal, frame):
+        """Start a graceful shutdown"""
+        o.should_exit = True
+
+    def trigger_reload(signal, frame):
+        """Handle signal to reload config"""
+        _reload_config()
+
+    o.should_exit = False
+
+    set_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
     reporter = _PrintReporter()
 
     _reload_config()
 
-    global _scheduled_items
-
-    while not should_exit:
+    while not o.should_exit:
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())
 
         _log.debug('%r children', child_count)
 
-        if not _scheduled_items:
+        if not o.scheduled_items:
             _log.info('No scheduled items. Sleeping.')
             time.sleep(500)
             continue
 
         now = time.time()
 
-        #: :type: (int, ScheduledItem)
-        next_time, scheduled_item = _scheduled_items[0]
+        # : :type: (int, ScheduledItem)
+        next_time, scheduled_item = o.scheduled_items[0]
 
         if next_time < now:
             # Trigger time has passed, so let's run it.
 
             #: :type: (int, ScheduledItem)
-            next_time, scheduled_item = heapq.heappop(_scheduled_items)
+            next_time, scheduled_item = heapq.heappop(o.scheduled_items)
             _spawn_run_process(reporter, scheduled_item.name, scheduled_item.module)
 
             # Schedule next run for this module
-            next_trigger = schedule_module(_scheduled_items, now, scheduled_item)
+            next_trigger = schedule_module(o.scheduled_items, now, scheduled_item)
 
             _log.debug('Next trigger in %.1s seconds', next_trigger - now)
         else:

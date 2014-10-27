@@ -131,9 +131,14 @@ def run_loop():
     """
     Main loop
     """
-    o = object()
-    o.should_exit = False
-    o.scheduled_items = []
+
+    # Workaround for python 2's lack of 'nonlocal': We need to change these vars in signal handlers.
+    class RunState(object):
+        def __init__(self):
+            self.exiting = False
+            self.scheduled_items = []
+
+    o = RunState()
 
     def _reload_config():
         """Reload configuration."""
@@ -143,20 +148,18 @@ def run_loop():
 
     def trigger_exit(signal, frame):
         """Start a graceful shutdown"""
-        o.should_exit = True
+        o.exiting = True
 
     def trigger_reload(signal, frame):
         """Handle signal to reload config"""
         _reload_config()
 
-    o.should_exit = False
-
+    _reload_config()
     set_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
+
     reporter = _PrintReporter()
 
-    _reload_config()
-
-    while not o.should_exit:
+    while not o.exiting:
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())
 
@@ -182,11 +185,11 @@ def run_loop():
             # Schedule next run for this module
             next_trigger = schedule_module(o.scheduled_items, now, scheduled_item)
 
-            _log.debug('Next trigger in %.1s seconds', next_trigger - now)
+            _log.debug('Next trigger in %.1f minutes', next_trigger - now)
         else:
             # Sleep until next action is ready.
             sleep_seconds = (next_time - now) + 0.1
-            _log.debug('Sleeping for %.1sm, until action %r', sleep_seconds / 60.0, scheduled_item.name)
+            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, scheduled_item.name)
             time.sleep(sleep_seconds)
 
     # TODO: Do something about error return codes from children?

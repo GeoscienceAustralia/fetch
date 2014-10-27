@@ -113,6 +113,24 @@ def _init_signals(trigger_exit=None, trigger_reload=None):
     signal.signal(signal.SIGHUP, trigger_reload if trigger_reload else signal.SIG_DFL)
 
 
+def _on_child_finish(child):
+    """
+    Handle child process cleanup: Check for errors.
+
+    :type child: multiprocessing.Process
+    """
+    exit_code = child.exitcode
+    if exit_code is None:
+        _log.warn('Child not finished %s %s', child.name, child.pid)
+        return
+
+    _log.debug('Child finished %r %r', child.name, child.pid)
+
+    # TODO: Send mail, alert or something?
+    if exit_code != 0:
+        _log.error('Error return code %s from %r', exit_code, child.name)
+
+
 def filter_finished_children(running_children):
     """
     Filter and check the exit codes of finished children.
@@ -128,8 +146,7 @@ def filter_finished_children(running_children):
             still_running.add(child)
             continue
 
-        if exit_code != 0:
-            _log.error('Error return code %s from %r', exit_code, child.name)
+        _on_child_finish(child)
 
     return still_running
 
@@ -152,7 +169,7 @@ def run_loop():
 
     def _reload_config():
         """Reload configuration."""
-        _log.info('Reloading configuration...')
+        _log.info('Reloading configuration')
         o.schedule = _build_schedule(load_schedule())
         _log.debug('%s modules loaded', len(o.schedule))
 
@@ -206,10 +223,11 @@ def run_loop():
             _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, next_item.name)
             time.sleep(sleep_seconds)
 
-    # TODO: Do something about error return codes from children?
-    _log.info('Shutting down. Joining %r children', len(multiprocessing.active_children()))
-    for p in multiprocessing.active_children():
+    all_children = running_children.union(multiprocessing.active_children())
+    _log.info('Shutting down. Joining %r children', len(all_children))
+    for p in all_children:
         p.join()
+        _on_child_finish(p)
 
 
 if __name__ == '__main__':
@@ -219,6 +237,6 @@ if __name__ == '__main__':
         level=logging.WARNING
     )
     _log.setLevel(logging.DEBUG)
-    logging.getLogger('onreceipt').setLevel(logging.DEBUG)
+    logging.getLogger('onreceipt').setLevel(logging.INFO)
 
     run_loop()

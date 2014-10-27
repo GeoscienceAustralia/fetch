@@ -132,8 +132,11 @@ def run_loop():
     Main loop
     """
 
-    # Workaround for python 2's lack of 'nonlocal': We need to change these vars in signal handlers.
     class RunState(object):
+        """
+        Workaround for python 2's lack of 'nonlocal'.
+        Contains vars that we change within signal handlers.
+        """
         def __init__(self):
             self.exiting = False
             self.scheduled_items = []
@@ -146,11 +149,11 @@ def run_loop():
         o.scheduled_items = schedule_modules(load_modules())
         _log.debug('%s modules loaded', len(o.scheduled_items))
 
-    def trigger_exit(signal, frame):
+    def trigger_exit(signal_, frame_):
         """Start a graceful shutdown"""
         o.exiting = True
 
-    def trigger_reload(signal, frame):
+    def trigger_reload(signal_, frame_):
         """Handle signal to reload config"""
         _reload_config()
 
@@ -199,9 +202,6 @@ def run_loop():
 
 
 if __name__ == '__main__':
-    """
-    Fetch each configured ancillary file.
-    """
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,

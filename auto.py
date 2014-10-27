@@ -113,8 +113,9 @@ def _init_signals(trigger_exit=None, trigger_reload=None):
     signal.signal(signal.SIGHUP, trigger_reload if trigger_reload else signal.SIG_DFL)
 
 
-def check_exit_codes(running_children):
+def filter_finished_children(running_children):
     """
+    Filter and check the exit codes of finished children.
 
     :type running_children: set of multiprocessing.Process
     :rtype: set of multiprocessing.Process
@@ -170,7 +171,7 @@ def run_loop():
     running_children = set()
 
     while not o.exiting:
-        running_children = check_exit_codes(running_children)
+        running_children = filter_finished_children(running_children)
 
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())

@@ -3,7 +3,7 @@ Logic to load configuration.
 
 """
 from . import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource, DataSource
+    RsyncMirrorSource
 
 
 class ScheduledItem(object):
@@ -11,7 +11,7 @@ class ScheduledItem(object):
     Scheduling information for a module.
     :type name: str
     :type cron_pattern: str
-    :type module: DataSource
+    :type module: onreceipt.fetch.DataSource
     """
 
     def __init__(self, name, cron_pattern, module):

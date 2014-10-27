@@ -13,7 +13,6 @@ import heapq
 import time
 import multiprocessing
 import signal
-from mock import Mock
 
 from . import DataSource, FetchReporter
 from croniter import croniter
@@ -72,28 +71,30 @@ def _build_schedule(items):
 
 def _run_module(reporter, name, module):
     """
-    (from a new process), run the given module.
-    :param reporter:
-    :param name:
-    :param module:
-    :return:
-    """
-    setproctitle('fetch %s' % name)
-    _init_signals()
-    _log.info('Triggering %s: %r', DataSource.__name__, module)
-    module.trigger(reporter)
-
-
-def _spawn_run_process(reporter, name, module):
-    """Run the given module in a subprocess
+    Run the given module in a subprocess
     :type reporter: FetchReporter
     :type name: str
     :type module: DataSource
+    :rtype: multiprocessing.Process
     """
+
+    def _run_proc(reporter, name, module):
+        """
+        (from a new process), run the given module.
+        :param reporter:
+        :param name:
+        :param module:
+        :return:
+        """
+        setproctitle('fetch %s' % name)
+        _init_signals()
+        _log.info('Triggering %s: %r', DataSource.__name__, module)
+        module.trigger(reporter)
+
     _log.info('Spawning %s', name)
     _log.debug('Module info %r', module)
     p = multiprocessing.Process(
-        target=_run_module,
+        target=_run_proc,
         name='fetch %s' % name,
         args=(reporter, name, module)
     )
@@ -102,7 +103,8 @@ def _spawn_run_process(reporter, name, module):
 
 
 def _init_signals(trigger_exit=None, trigger_reload=None):
-    """Set signal handlers
+    """
+    Set signal handlers
     :param trigger_reload: Handler for reload
     :type trigger_exit: Handler for exit
     """
@@ -211,7 +213,7 @@ def run_loop():
 
             #: :type: (int, ScheduledItem)
             next_time, next_item = heapq.heappop(o.schedule)
-            p = _spawn_run_process(reporter, next_item.name, next_item.module)
+            p = _run_module(reporter, next_item.name, next_item.module)
             running_children.add(p)
 
             # Schedule next run for this module

@@ -112,14 +112,14 @@ def load_schedule():
                 # Download a date range of 3 days
                 http.HttpListingSource(
                     # Added via the date range pattern
-                    source_url='',
+                    url='',
                     # Added via the date range pattern
                     target_dir='',
                     # Match three file types:
                     # gdas1.pgrb00.1p0deg.20110617_12_000.grib2
                     # NISE_SSMISF17_20110617.HDFEOS
                     # gfs.press_gr.0p5deg_pt.20110617_00_003.npoess.grib2
-                    listing_name_filter='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
+                    name_pattern='(gdas.*\\.npoess\\.grib2|NISE.*HDFEOS|gfs\\.press_gr.*grib2)'
                 ),
                 overridden_properties={
                     'source_url': 'http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
@@ -134,7 +134,7 @@ def load_schedule():
             'NPP LUTS',
             '0 16 25 * *',
             http.HttpListingSource(
-                source_url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
+                url='http://jpssdb.ssec.wisc.edu/ancillary/LUTS_V_1_3',
                 target_dir=anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/luts',
             )
         ),
@@ -211,13 +211,13 @@ def load_schedule():
             DateRangeSource(
                 http.HttpListingSource(
                     # Added via the date range pattern
-                    source_url='',
+                    url='',
                     # Added via the date range pattern
                     target_dir='',
-                    listing_name_filter='[AP]M1(ATT|EPH).*'
+                    name_pattern='[AP]M1(ATT|EPH).*'
                 ),
                 overridden_properties={
-                    'source_url': 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/Attitude-Ephemeris/{year}/{julday}',
+                    'url': 'http://oceandata.sci.gsfc.nasa.gov/Ancillary/Attitude-Ephemeris/{year}/{julday}',
                     'target_dir': anc_data + '/sensor-specific/MODIS/ancillary/{year}/{julday}',
                 },
                 from_days=-3,
@@ -234,3 +234,7 @@ def load_schedule():
             )
         )
     ]
+
+if __name__ == '__main__':
+    import yaml
+    print yaml.dump(load_schedule(), default_flow_style=False)

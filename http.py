@@ -71,15 +71,15 @@ class HttpSource(DataSource):
     repeatedly updated.
     """
 
-    def __init__(self, source_urls, target_dir):
+    def __init__(self, urls, target_dir):
         """
-        :type source_urls: list of str
+        :type urls: list of str
         :type target_dir: str
         :return:
         """
         super(HttpSource, self).__init__()
 
-        self.source_urls = source_urls
+        self.urls = urls
         self.target_dir = target_dir
 
     def trigger(self, reporter):
@@ -88,7 +88,7 @@ class HttpSource(DataSource):
         :type reporter: FetchReporter
         :return:
         """
-        for url in self.source_urls:
+        for url in self.urls:
             name = filename_from_url(url)
             _fetch_file(self.target_dir, name, reporter, url, override_existing=True)
 
@@ -100,11 +100,11 @@ class HttpListingSource(DataSource):
     A pattern can be supplied to limit files by filename.
     """
 
-    def __init__(self, source_url, target_dir, listing_name_filter='.*', filename_transform=None):
+    def __init__(self, url, target_dir, name_pattern='.*', filename_transform=None):
         super(HttpListingSource, self).__init__()
 
-        self.source_url = source_url
-        self.listing_name_filter = listing_name_filter
+        self.url = url
+        self.name_pattern = name_pattern
         self.target_dir = target_dir
         self.filename_transform = filename_transform
 
@@ -112,14 +112,14 @@ class HttpListingSource(DataSource):
         """
         Download the given listing page, and any links that match the name pattern.
         """
-        res = requests.get(self.source_url)
+        res = requests.get(self.url)
         if res.status_code == 404:
             _log.debug("Listing page doesn't exist yet. Skipping.")
             return
 
         if res.status_code != 200:
             _log.debug('Received text %r', res.text)
-            reporter.file_error(self.source_url, "Status code %r" % res.status_code)
+            reporter.file_error(self.url, "Status code %r" % res.status_code)
             return
 
         page = etree.fromstring(res.text, parser=etree.HTMLParser())
@@ -136,7 +136,7 @@ class HttpListingSource(DataSource):
                 _log.info('Not a filename %r, skipping.', name)
                 continue
 
-            if not re.match(self.listing_name_filter, name):
+            if not re.match(self.name_pattern, name):
                 _log.info("Filename (%r) doesn't match pattern, skipping.", name)
                 continue
 
@@ -156,16 +156,16 @@ class RssSource(DataSource):
     The title of feed entries is assumed to be the filename.
     """
 
-    def __init__(self, rss_url, target_dir, filename_transform=None):
+    def __init__(self, url, target_dir, filename_transform=None):
         """
-        :type rss_url: str
+        :type url: str
         :type target_dir: str
         :type filename_transform: FilenameTransform
         :return:
         """
         super(RssSource, self).__init__()
 
-        self.rss_url = rss_url
+        self.url = url
         self.target_dir = target_dir
 
         self.filename_transform = filename_transform
@@ -175,11 +175,11 @@ class RssSource(DataSource):
         Download RSS feed and fetch missing files.
         """
         # Fetch feed.
-        res = requests.get(self.rss_url)
+        res = requests.get(self.url)
 
         if res.status_code != 200:
             _log.debug('Received text %r', res.text)
-            reporter.file_error(self.rss_url, "Status code %r" % res.status_code)
+            reporter.file_error(self.url, "Status code %r" % res.status_code)
             return
 
         feed = feedparser.parse(res.text)

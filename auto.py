@@ -113,6 +113,26 @@ def _init_signals(trigger_exit=None, trigger_reload=None):
     signal.signal(signal.SIGHUP, trigger_reload if trigger_reload else signal.SIG_DFL)
 
 
+def check_exit_codes(running_children):
+    """
+
+    :type running_children: set of multiprocessing.Process
+    :rtype: set of multiprocessing.Process
+    """
+    still_running = set()
+
+    for child in running_children:
+        exit_code = child.exitcode
+        if exit_code is None:
+            still_running.add(child)
+            continue
+
+        if exit_code != 0:
+            _log.error('Error return code %s from %r', exit_code, child.name)
+
+    return still_running
+
+
 def run_loop():
     """
     Main loop
@@ -147,12 +167,15 @@ def run_loop():
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     reporter = _PrintReporter()
+    running_children = set()
 
     while not o.exiting:
+        running_children = check_exit_codes(running_children)
+
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())
 
-        _log.debug('%r children', child_count)
+        _log.debug('%r recorded children, %r total children', len(running_children), child_count)
 
         if not o.schedule:
             _log.info('No scheduled items. Sleeping.')
@@ -169,7 +192,8 @@ def run_loop():
 
             #: :type: (int, ScheduledItem)
             next_time, next_item = heapq.heappop(o.schedule)
-            _spawn_run_process(reporter, next_item.name, next_item.module)
+            p = _spawn_run_process(reporter, next_item.name, next_item.module)
+            running_children.add(p)
 
             # Schedule next run for this module
             next_trigger = _schedule_item(o.schedule, now, next_item)

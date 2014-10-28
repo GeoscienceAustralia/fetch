@@ -20,7 +20,7 @@ from croniter import croniter
 from setproctitle import setproctitle
 
 from . import DataSource, FetchReporter
-from onreceipt.fetch.load import load_config
+from .load import load_config
 
 
 _log = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-def _can_lock(lock_file):
+def _attempt_lock(lock_file):
     """
     Use the given file as a lock.
 
@@ -91,57 +91,72 @@ def _run_module(reporter, name, module, scheduled_time, log_directory, lock_dire
     :type reporter: FetchReporter
     :type name: str
     :type module: DataSource
-    :rtype: multiprocessing.Process
+    :rtype: ScheduledProcess
     """
-
-    def _run_proc(reporter, readable_name, module, log_file, lock_file):
-        """
-        (from a new process), run the given module.
-        :param reporter:
-        :param readable_name:
-        :param module:
-        :return:
-        """
-        _redirect_output(log_file)
-
-        if not _can_lock(lock_file):
-            _log.debug('Lock is activated. Skipping run. %r', readable_name)
-            sys.exit(0)
-
-        setproctitle(readable_name)
-        _init_signals()
-        _log.debug('Triggering %s: %r', readable_name, module)
-        module.trigger(reporter)
-
-    _id = _sanitize_for_filename(name)
-    lock_file = os.path.join(
-        lock_directory,
-        '{id}.lck'.format(id=_id)
+    p = ScheduledProcess(
+        reporter, name, module, scheduled_time, log_directory, lock_directory
     )
-    scheduled_time_st = time.strftime('%H%M', time.localtime(scheduled_time))
-    log_file = os.path.join(
-        log_directory,
-        '{time}-{id}.log'.format(
-            id=_id,
-            time=scheduled_time_st
-        )
-    )
-    readable_name = 'fetch {} {}'.format(scheduled_time_st, name)
 
-    _log.info('Spawning %r. Log %r, Lock %r', readable_name, log_file, lock_file)
     _log.debug('Module info %r', module)
-    p = multiprocessing.Process(
-        target=_run_proc,
-        name=readable_name,
-        args=(reporter, readable_name, module, log_file, lock_file)
-    )
+    _log.info('Starting %r. Log %r, Lock %r', p.name, p.log_file, p.lock_file)
     p.start()
     return p
 
 
+class ScheduledProcess(multiprocessing.Process):
+    """
+    A subprocess to run a module.
+    """
+    def __init__(self, reporter, name, module, scheduled_time, log_directory, lock_directory):
+        """
+        :type reporter: FetchReporter
+        :type name: str
+        :type module: DataSource
+        :type scheduled_time: float
+        :type log_directory: str
+        :type lock_directory: str
+        """
+        super(ScheduledProcess, self).__init__()
+        _id = _sanitize_for_filename(name)
+        lock_file = os.path.join(
+            lock_directory,
+            '{id}.lck'.format(id=_id)
+        )
+        scheduled_time_st = time.strftime('%H%M', time.localtime(scheduled_time))
+        log_file = os.path.join(
+            log_directory,
+            '{time}-{id}.log'.format(
+                id=_id,
+                time=scheduled_time_st
+            )
+        )
+
+        self.log_file = log_file
+        self.lock_file = lock_file
+        self.name = 'fetch {} {}'.format(scheduled_time_st, name)
+        self.module = module
+        self.reporter = reporter
+
+    def run(self):
+        """
+        Configure the environment and run our module.
+        """
+        _init_signals()
+        _redirect_output(self.log_file)
+
+        if not _attempt_lock(self.lock_file):
+            _log.debug('Lock is activated. Skipping run. %r', self.name)
+            sys.exit(0)
+
+        setproctitle(self.name)
+        _log.debug('Triggering %s: %r', self.name, self.module)
+        self.module.trigger(self.reporter)
+
+
 def _init_signals(trigger_exit=None, trigger_reload=None):
     """
-    Set signal handlers
+    Set signal handlers.
+
     :param trigger_reload: Handler for reload
     :type trigger_exit: Handler for exit
     """
@@ -157,7 +172,7 @@ def _on_child_finish(child):
     """
     Handle child process cleanup: Check for errors.
 
-    :type child: multiprocessing.Process
+    :type child: ScheduledProcess
     """
     exit_code = child.exitcode
     if exit_code is None:
@@ -168,15 +183,15 @@ def _on_child_finish(child):
 
     # TODO: Send mail, alert or something?
     if exit_code != 0:
-        _log.error('Error return code %s from %r', exit_code, child.name)
+        _log.error('Error return code %s from %r. Output logged to %r', exit_code, child.name, child.log_file)
 
 
 def _filter_finished_children(running_children):
     """
     Filter and check the exit codes of finished children.
 
-    :type running_children: set of multiprocessing.Process
-    :rtype: set of multiprocessing.Process
+    :type running_children: set of ScheduledProcess
+    :rtype: set of ScheduledProcess
     """
     still_running = set()
 
@@ -191,16 +206,22 @@ def _filter_finished_children(running_children):
     return still_running
 
 
-def _sanitize_for_filename(filename):
+def _sanitize_for_filename(text):
     """
-    :type filename: str
+    Sanitize the given text for use in a filename.
+
+    (particularly log and lock files under Unix. So we lowercase them.)
+
+    :type text: str
     :rtype: str
     >>> _sanitize_for_filename('some one')
     'some-one'
-    >>> _sanitize_for_filename('s@me one')
+    >>> _sanitize_for_filename('s@me One')
     's-me-one'
+    >>> _sanitize_for_filename('LS8 BPF')
+    'ls8-bpf'
     """
-    return "".join([x if x.isalnum() else "-" for x in filename])
+    return "".join([x if x.isalnum() else "-" for x in text.lower()])
 
 
 def get_day_log_dir(log_directory, time_secs):
@@ -224,6 +245,9 @@ def get_day_log_dir(log_directory, time_secs):
 
 
 def _on_shutdown(running_children):
+    """
+    :type running_children: set of ScheduledProcess
+    """
     # Shut down -- Join all children.
     all_children = running_children.union(multiprocessing.active_children())
     _log.info('Shutting down. Joining %r children', len(all_children))
@@ -234,7 +258,7 @@ def _on_shutdown(running_children):
 
 class Schedule(object):
     """
-    Track scheduled items.
+    A schedule for download items.
 
     Keeps items ordered by date so the next item can be easily retrieved.
     """
@@ -289,13 +313,16 @@ class RunConfig(object):
         self.log_directory = None
         self.lock_directory = None
 
-    def reload(self):
+    def load(self):
         """
         Reload configuration
         """
         config = load_config()
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
+
+        if not os.path.exists(self.base_directory):
+            raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
 
         # Cannot change lock directory 'live'
         if not self.lock_directory:
@@ -312,14 +339,8 @@ def run_loop():
     """
     Main loop
     """
-
     o = RunConfig()
-
-    def _reload_config():
-        """Reload configuration."""
-        _log.info('Reloading configuration')
-        o.reload()
-        _log.debug('%s rules loaded', len(o.schedule.schedule))
+    o.load()
 
     def trigger_exit(signal_, frame_):
         """Start a graceful shutdown"""
@@ -327,17 +348,16 @@ def run_loop():
 
     def trigger_reload(signal_, frame_):
         """Handle signal to reload config"""
-        _reload_config()
-
-    _reload_config()
-
-    if not os.path.exists(o.base_directory):
-        raise ValueError('Configured base folder does not exist: %r' % o.base_directory)
+        _log.info('Reloading configuration')
+        o.load()
+        _log.debug('%s rules loaded', len(o.schedule.schedule))
 
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     reporter = _PrintReporter()
+
     # Keep track of running children to view their exit codes later.
+    #: :type: set of ScheduledProcessor
     running_children = set()
 
     while not o.are_exiting:

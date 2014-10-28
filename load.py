@@ -336,11 +336,11 @@ def _init_yaml_handling():
 
     add_default_constructor(DateRangeSource, '!date-range')
     add_default_constructor(RsyncMirrorSource, '!rsync')
-    add_default_constructor(http.HttpListingSource, '!http-listing')
-    add_default_constructor(http.HttpSource, '!http')
+    add_default_constructor(http.HttpListingSource, '!http-directory')
+    add_default_constructor(http.HttpSource, '!http-file')
     add_default_constructor(http.RssSource, '!rss')
-    add_default_constructor(ftp.FtpSource, '!ftp')
-    add_default_constructor(ftp.FtpListingSource, '!ftp-listing')
+    add_default_constructor(ftp.FtpSource, '!ftp-file')
+    add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
     add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
     add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
 

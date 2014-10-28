@@ -298,27 +298,27 @@ class DateRangeSource(DataSource):
     Repeat a source multiple times with different dates.
     """
 
-    def __init__(self, source_prototype, overridden_properties, from_days=-1, to_days=1):
+    def __init__(self, using, overridden_properties, start_day=-1, end_day=1):
         """
-        :type source_prototype: DataSource
+        :type using: DataSource
         :type overridden_properties: dict of (str, str)
-        :type from_days: int
-        :type to_days: int
+        :type start_day: int
+        :type end_day: int
         """
         super(DateRangeSource, self).__init__()
-        self.overidden_properties = overridden_properties
+        self.overridden_properties = overridden_properties
 
         # : :type: DataSource
-        self.source_prototype = source_prototype
+        self.using = using
 
-        self.from_days = from_days
-        self.to_days = to_days
+        self.start_day = start_day
+        self.end_day = end_day
 
     def trigger(self, reporter):
         """
         Run the DataSource prototype once for each date in the range.
         """
-        for day in _date_range(self.from_days, self.to_days):
+        for day in _date_range(self.start_day, self.end_day):
             date_params = {
                 'year': day.strftime('%Y'),
                 'month': day.strftime('%m'),
@@ -326,10 +326,10 @@ class DateRangeSource(DataSource):
                 'julday': day.strftime('%j')
             }
 
-            for name, pattern in self.overidden_properties.iteritems():
+            for name, pattern in self.overridden_properties.iteritems():
                 value = pattern.format(**date_params)
                 _log.debug('Setting %r=%r', name, value)
-                setattr(self.source_prototype, name, value)
+                setattr(self.using, name, value)
 
-            _log.info('Triggering %r', self.source_prototype)
-            self.source_prototype.trigger(reporter)
+            _log.info('Triggering %r', self.using)
+            self.using.trigger(reporter)

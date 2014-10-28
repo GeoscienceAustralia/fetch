@@ -17,7 +17,7 @@ import signal
 from . import DataSource, FetchReporter
 from croniter import croniter
 from setproctitle import setproctitle
-from onreceipt.fetch.load import load_schedule
+from onreceipt.fetch.load import load_config
 
 
 _log = logging.getLogger(__name__)
@@ -173,8 +173,9 @@ def run_loop():
     def _reload_config():
         """Reload configuration."""
         _log.info('Reloading configuration')
-        o.schedule = _build_schedule(load_schedule())
-        _log.debug('%s modules loaded', len(o.schedule))
+        config = load_config()
+        o.schedule = _build_schedule(config.schedule)
+        _log.debug('%s rules loaded', len(o.schedule))
 
     def trigger_exit(signal_, frame_):
         """Start a graceful shutdown"""

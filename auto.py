@@ -31,20 +31,20 @@ class _PrintReporter(FetchReporter):
     Print events to the log.
     """
 
-    def file_complete(self, uri, name, path):
+    def file_complete(self, source_uri, path):
         """
-        :type uri: str
-        :type name: str
+        :type source_uri: str
+        :type source_uri: str
         :type path: str
         """
-        _log.info('Completed %r: %r -> %r', name, uri, path)
+        _log.info('Completed %r: %r -> %r', os.path.basename(path), source_uri, path)
 
     def file_error(self, uri, message):
         """
         :type uri: str
         :type message: str
         """
-        _log.info('Error (%r): %r)', uri, message)
+        _log.info('Error (%r): %r', uri, message)
 
 
 def _attempt_lock(lock_file):

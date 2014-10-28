@@ -2,7 +2,7 @@
 A package for automatically fetching files (eg. Ancillary).
 """
 import datetime
-from neocommon import files
+from neocommon import files, Uri
 import os
 import re
 import logging
@@ -58,11 +58,22 @@ class FetchReporter(object):
         """
         pass
 
-    def file_complete(self, uri, name, path):
+    def files_complete(self, source_uri, paths):
+        """
+        Call on completion of multiple files.
+
+        Some implementations may override this for more efficient bulk handling files.
+        :param source_uri:
+        :param paths:
+        :return:
+        """
+        for path in paths:
+            self.file_complete(source_uri, path)
+
+    def file_complete(self, source_uri, path):
         """
         Call on completion of a file
-        :type uri: str
-        :type name: str
+        :type source_uri: str
         :type path: str
         """
         pass
@@ -239,7 +250,7 @@ def fetch_file(uri,
         _log.debug('Rename %r -> %r', t, target_path)
         os.rename(t, target_path)
         # Report as complete.
-        reporter.file_complete(uri, target_filename, target_path)
+        reporter.file_complete(uri, target_path)
     finally:
         if t and os.path.exists(t):
             os.remove(t)
@@ -289,8 +300,12 @@ class RsyncMirrorSource(DataSource):
             source_host=self.source_host,
             destination_host=self.target_host
         )
-        # TODO: We'll eventually track/announce newly arriving files.
         _log.debug('Transferred: %r', transferred_files)
+        reporter.files_complete(
+            Uri.from_host_path(self.source_host, self.source_path).get_qualified_uri(),
+            transferred_files
+        )
+
 
 
 class DateRangeSource(DataSource):

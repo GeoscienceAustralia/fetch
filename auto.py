@@ -95,6 +95,21 @@ def _can_lock(lock_file):
     return True
 
 
+def _redirect_output(log_file):
+    """
+    Redirect all output to the given file.
+
+    :type log_file: str
+    """
+    output = open(log_file, 'w')
+    sys.stdout = output
+    sys.stderr = output
+    logging.getLogger().removeHandler(_log_handler)
+    handler = logging.StreamHandler(stream=output)
+    handler.setFormatter(_log_formatter)
+    logging.getLogger().addHandler(handler)
+
+
 def _run_module(reporter, name, module, scheduled_time, log_directory, lock_directory):
     """
     Run the given module in a subprocess
@@ -103,7 +118,6 @@ def _run_module(reporter, name, module, scheduled_time, log_directory, lock_dire
     :type module: DataSource
     :rtype: multiprocessing.Process
     """
-
     def _run_proc(reporter, readable_name, module, log_file, lock_file):
         """
         (from a new process), run the given module.
@@ -112,9 +126,7 @@ def _run_module(reporter, name, module, scheduled_time, log_directory, lock_dire
         :param module:
         :return:
         """
-        output = open(log_file, 'w')
-        sys.stdout = output
-        sys.stderr = output
+        _redirect_output(log_file)
 
         if not _can_lock(lock_file):
             _log.debug('Lock is activated. Skipping run. %r', readable_name)
@@ -276,7 +288,11 @@ def run_loop():
 
     # Cannot change these values 'live' (config reload).
     lock_directory = os.path.join(o.base_directory, 'lock')
+    if not os.path.exists(lock_directory):
+        os.makedirs(lock_directory)
     log_directory = os.path.join(o.base_directory, 'log')
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
 
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
@@ -335,13 +351,15 @@ def run_loop():
         p.join()
         _on_child_finish(p)
 
+_log_handler = logging.StreamHandler(stream=sys.stderr)
+_log_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+_log_handler.setFormatter(_log_formatter)
+
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-        level=logging.WARNING
-    )
+    logging.getLogger().addHandler(_log_handler)
+    logging.getLogger().setLevel(logging.WARNING)
+
     _log.setLevel(logging.DEBUG)
     logging.getLogger('onreceipt').setLevel(logging.INFO)
 

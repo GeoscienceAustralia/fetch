@@ -176,7 +176,7 @@ def _old_schedule():
             'schedule': '30 0-23/2 * * *',
             'source': ftp.FtpSource(
                 hostname='is.sci.gsfc.nasa.gov',
-                source_paths=[
+                paths=[
                     '/ancillary/ephemeris/tle/drl.tle',
                     '/ancillary/ephemeris/tle/norad.tle',
                 ],
@@ -189,7 +189,7 @@ def _old_schedule():
             'schedule': '40 0-23/2 * * *',
             'source': ftp.FtpSource(
                 hostname='is.sci.gsfc.nasa.gov',
-                source_paths=[
+                paths=[
                     '/ancillary/ephemeris/tle/noaa/noaa.tle',
                 ],
                 # Prepend the current date to the output filename
@@ -337,13 +337,14 @@ def _init_yaml_handling():
     add_default_constructor(DateRangeSource, '!date-range')
     add_default_constructor(RsyncMirrorSource, '!rsync')
     add_default_constructor(http.HttpListingSource, '!http-directory')
-    add_default_constructor(http.HttpSource, '!http-file')
+    add_default_constructor(http.HttpSource, '!http-files')
     add_default_constructor(http.RssSource, '!rss')
-    add_default_constructor(ftp.FtpSource, '!ftp-file')
+    add_default_constructor(ftp.FtpSource, '!ftp-files')
     add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
     add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
     add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
 
+_init_yaml_handling()
 
 def dump_old_schedule():
     """

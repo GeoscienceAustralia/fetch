@@ -67,16 +67,16 @@ class FtpSource(DataSource):
     repeatedly updated.
     """
 
-    def __init__(self, hostname, source_paths, target_dir, filename_transform=None):
+    def __init__(self, hostname, paths, target_dir, filename_transform=None):
         """
-        :type source_paths: list of str
+        :type paths: list of str
         :type target_dir: str
         :return:
         """
         super(FtpSource, self).__init__()
 
         self.hostname = hostname
-        self.source_paths = source_paths
+        self.paths = paths
         self.target_dir = target_dir
         self.filename_transform = filename_transform
 
@@ -89,7 +89,7 @@ class FtpSource(DataSource):
 
         def get_files(_):
             """Return a static set of file paths to download"""
-            return self.source_paths
+            return self.paths
 
         _fetch_files(
             self.hostname,

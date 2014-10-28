@@ -2,10 +2,10 @@
 Logic to load configuration.
 
 """
-from . import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource
 import functools
 
+from . import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
+    RsyncMirrorSource
 import yaml
 import yaml.resolver
 
@@ -39,6 +39,7 @@ class Config(object):
     """
     Configuration.
     """
+
     def __init__(self, directory, schedule):
         """
         :type directory: str
@@ -55,7 +56,7 @@ def _parse_config_dict(schedule):
     :rtype: list of ScheduledItem
     """
     directory = schedule['directory']
-    #: :type: dict of (str, dict)
+    # : :type: dict of (str, dict)
     rules = schedule['rules']
 
     schedule = []
@@ -63,6 +64,108 @@ def _parse_config_dict(schedule):
         schedule.append(ScheduledItem(name, fields['schedule'], fields['source']))
 
     return Config(directory, schedule)
+
+
+def _init_yaml_handling():
+    """
+    Allow load/dump of our custom classes in YAML.
+    """
+
+    def _yaml_default_constructor(cls, loader, node):
+        """
+        A YAML parser that maps fields ot parameter names of the class constructor.
+
+        :type loader: yaml.Loader
+        :param node:
+        :return:
+        """
+        fields = loader.construct_mapping(node)
+        return cls(**fields)
+
+    def _yaml_item_constructor(cls, loader, node):
+        """
+        A YAML parser that that maps a single string to a one-argument class constructor.
+
+        :type loader: yaml.Loader
+        :param node:
+        :return:
+        """
+        field = loader.construct_scalar(node)
+        return cls(field)
+
+    def _yaml_default_representer(tag, flow_style, dumper, data):
+        """
+        Represent the (__dict__) fields of an object as a YAML map.
+
+        Null fields are ignored.
+
+        :param dumper: yaml.Dumper
+        :param data:
+        :return:
+        """
+        clean_dict = dict((k, v) for k, v in data.__dict__.iteritems() if v is not None)
+        return dumper.represent_mapping(
+            tag,
+            clean_dict,
+            flow_style=flow_style
+        )
+
+    def _yaml_item_representer(tag, attr_name, dumper, data):
+        """
+        Represent an attribute of the given object as a simple yaml string.
+        """
+        return dumper.represent_scalar(tag, getattr(data, attr_name))
+
+    def add_default_constructor(source, type_annotation, flow_style=None):
+        """
+        A default object-to-map association for YAML.
+
+        The class being mapped must have exactly matching fields and constructor arguments.
+        """
+        yaml.add_constructor(type_annotation, functools.partial(_yaml_default_constructor, source))
+        yaml.add_representer(source, functools.partial(_yaml_default_representer, type_annotation, flow_style))
+
+    def add_item_constructor(source, type_annotation, attribute):
+        """
+        A string-to-object association for YAML
+
+        The object class must have exactly one constructor argument.
+
+        :param attribute: The name of the attribute to fetch the string from.
+        """
+        yaml.add_constructor(type_annotation, functools.partial(_yaml_item_constructor, source))
+        yaml.add_representer(source, functools.partial(_yaml_item_representer, type_annotation, attribute))
+
+    add_default_constructor(DateRangeSource, '!date-range')
+    add_default_constructor(RsyncMirrorSource, '!rsync')
+    add_default_constructor(http.HttpListingSource, '!http-directory')
+    add_default_constructor(http.HttpSource, '!http-files')
+    add_default_constructor(http.RssSource, '!rss')
+    add_default_constructor(ftp.FtpSource, '!ftp-files')
+    add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
+    add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
+    add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
+
+
+_init_yaml_handling()
+
+
+def dump_old_schedule():
+    """
+    Dump the hard-coded schedule into YAML.
+
+    Does a load/dump/load to test our parsing/etc.
+
+    :return:
+    """
+    # Dump / Load / Dump to test our routines.
+    schedule = {
+        'directory': '/tmp/anc-fetch',
+        'rules': _old_schedule()
+    }
+    doc = yaml.dump(schedule, default_flow_style=False)
+    new_rules = yaml.load(doc)
+    print yaml.dump(new_rules, default_flow_style=False)
 
 
 def _old_schedule():
@@ -107,7 +210,6 @@ def _old_schedule():
                     # Extract year and month from filenames to use in destination directory
                     'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
                 ),
-
             )
         },
         'LS8 TLE': {
@@ -262,106 +364,6 @@ def _old_schedule():
             )
         }
     }
-
-
-def _init_yaml_handling():
-    """
-    Allow load/dump of our custom classes in YAML.
-    """
-    def _yaml_default_constructor(cls, loader, node):
-        """
-        A YAML parser that maps fields ot parameter names of the class constructor.
-
-        :type loader: yaml.Loader
-        :param node:
-        :return:
-        """
-        fields = loader.construct_mapping(node)
-        return cls(**fields)
-
-    def _yaml_item_constructor(cls, loader, node):
-        """
-        A YAML parser that that maps a single string to a one-argument class constructor.
-
-        :type loader: yaml.Loader
-        :param node:
-        :return:
-        """
-        field = loader.construct_scalar(node)
-        return cls(field)
-
-    def _yaml_default_representer(tag, flow_style, dumper, data):
-        """
-        Represent the (__dict__) fields of an object as a YAML map.
-
-        Null fields are ignored.
-
-        :param dumper: yaml.Dumper
-        :param data:
-        :return:
-        """
-        clean_dict = dict((k, v) for k, v in data.__dict__.iteritems() if v is not None)
-        return dumper.represent_mapping(
-            tag,
-            clean_dict,
-            flow_style=flow_style
-        )
-
-    def _yaml_item_representer(tag, attr_name, dumper, data):
-        """
-        Represent an attribute of the given object as a simple yaml string.
-        """
-        return dumper.represent_scalar(tag, getattr(data, attr_name))
-
-    def add_default_constructor(source, type_annotation, flow_style=None):
-        """
-        A default object-to-map association for YAML.
-
-        The class being mapped must have exactly matching fields and constructor arguments.
-        """
-        yaml.add_constructor(type_annotation, functools.partial(_yaml_default_constructor, source))
-        yaml.add_representer(source, functools.partial(_yaml_default_representer, type_annotation, flow_style))
-
-
-    def add_item_constructor(source, type_annotation, attribute):
-        """
-        A string-to-object association for YAML
-
-        The object class must have exactly one constructor argument.
-
-        :param attribute: The name of the attribute to fetch the string from.
-        """
-        yaml.add_constructor(type_annotation, functools.partial(_yaml_item_constructor, source))
-        yaml.add_representer(source, functools.partial(_yaml_item_representer, type_annotation, attribute))
-
-    add_default_constructor(DateRangeSource, '!date-range')
-    add_default_constructor(RsyncMirrorSource, '!rsync')
-    add_default_constructor(http.HttpListingSource, '!http-directory')
-    add_default_constructor(http.HttpSource, '!http-files')
-    add_default_constructor(http.RssSource, '!rss')
-    add_default_constructor(ftp.FtpSource, '!ftp-files')
-    add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
-    add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
-    add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
-
-_init_yaml_handling()
-
-def dump_old_schedule():
-    """
-    Dump the hard-coded schedule into YAML.
-
-    Does a load/dump/load to test our parsing/etc.
-
-    :return:
-    """
-    # Dump / Load / Dump to test our routines.
-    schedule = {
-        'directory': '/tmp/anc-fetch',
-        'rules': _old_schedule()
-    }
-    doc = yaml.dump(schedule, default_flow_style=False)
-    new_rules = yaml.load(doc)
-    print yaml.dump(new_rules, default_flow_style=False)
 
 
 if __name__ == '__main__':

@@ -7,16 +7,18 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
+import fcntl
 import logging
+import os
 import sys
 import heapq
 import time
 import multiprocessing
 import signal
-
-from . import DataSource, FetchReporter
 from croniter import croniter
 from setproctitle import setproctitle
+
+from . import DataSource, FetchReporter
 from onreceipt.fetch.load import load_config
 
 
@@ -69,7 +71,7 @@ def _build_schedule(items):
     return scheduled
 
 
-def _run_module(reporter, name, module):
+def _run_module(reporter, name, module, scheduled_time, log_directory, lock_directory):
     """
     Run the given module in a subprocess
     :type reporter: FetchReporter
@@ -78,25 +80,51 @@ def _run_module(reporter, name, module):
     :rtype: multiprocessing.Process
     """
 
-    def _run_proc(reporter, name, module):
+    def _run_proc(reporter, readable_name, module, log_file, lock_file):
         """
         (from a new process), run the given module.
         :param reporter:
-        :param name:
+        :param readable_name:
         :param module:
         :return:
         """
-        setproctitle('fetch %s' % name)
+        output = open(log_file, 'w')
+        sys.stdout = output
+        sys.stderr = output
+
+        fp = open(lock_file, 'w')
+        try:
+            fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError:
+            _log.debug('Lock is activated. Skipping run. %r', readable_name)
+            return
+
+        setproctitle(readable_name)
         _init_signals()
-        _log.info('Triggering %s: %r', DataSource.__name__, module)
+        _log.debug('Triggering %s: %r', readable_name, module)
         module.trigger(reporter)
 
-    _log.info('Spawning %s', name)
+    _id = _sanitize_for_filename(name)
+    lock_file = os.path.join(
+        lock_directory,
+        '{id}.lck'.format(id=_id)
+    )
+    scheduled_time_st = time.strftime('%H%M', time.localtime(scheduled_time))
+    log_file = os.path.join(
+        log_directory,
+        '{time}-{id}.log'.format(
+            id=_id,
+            time=scheduled_time_st
+        )
+    )
+    readable_name = 'fetch {} {}'.format(scheduled_time_st, name)
+
+    _log.info('Spawning %r. Log %r, Lock %r', readable_name, log_file, lock_file)
     _log.debug('Module info %r', module)
     p = multiprocessing.Process(
         target=_run_proc,
-        name='fetch %s' % name,
-        args=(reporter, name, module)
+        name=readable_name,
+        args=(reporter, readable_name, module, log_file, lock_file)
     )
     p.start()
     return p
@@ -154,6 +182,38 @@ def _filter_finished_children(running_children):
     return still_running
 
 
+def _sanitize_for_filename(filename):
+    """
+    :type filename: str
+    :rtype: str
+    >>> _sanitize_for_filename('some one')
+    'some-one'
+    >>> _sanitize_for_filename('s@me one')
+    's-me-one'
+    """
+    return "".join([x if x.isalnum() else "-" for x in filename])
+
+
+def get_day_log_dir(log_directory, time_secs):
+    """
+    Get log directory for this day.
+    :type log_directory: str
+    :type time_secs: float
+    :return:
+    """
+    # We use localtime because the cron scheduling uses localtime.
+    t = time.localtime(time_secs)
+    day_log_dir = os.path.join(
+        log_directory,
+        time.strftime('%Y', t),
+        time.strftime('%m-%d', t)
+    )
+    if not os.path.exists(day_log_dir):
+        os.makedirs(day_log_dir)
+
+    return day_log_dir
+
+
 def run_loop():
     """
     Main loop
@@ -164,9 +224,11 @@ def run_loop():
         Workaround for python 2's lack of 'nonlocal'.
         Contains vars that we change within signal handlers.
         """
+
         def __init__(self):
             self.exiting = False
             self.schedule = []
+            self.base_directory = None
 
     o = RunState()
 
@@ -175,6 +237,7 @@ def run_loop():
         _log.info('Reloading configuration')
         config = load_config()
         o.schedule = _build_schedule(config.schedule)
+        o.base_directory = config.directory
         _log.debug('%s rules loaded', len(o.schedule))
 
     def trigger_exit(signal_, frame_):
@@ -186,6 +249,14 @@ def run_loop():
         _reload_config()
 
     _reload_config()
+
+    if not os.path.exists(o.base_directory):
+        raise ValueError('Configured base folder does not exist: %r' % o.base_directory)
+
+    # Cannot change these values 'live' (config reload).
+    lock_directory = os.path.join(o.base_directory, 'lock')
+    log_directory = os.path.join(o.base_directory, 'log')
+
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     reporter = _PrintReporter()
@@ -205,16 +276,25 @@ def run_loop():
             continue
 
         now = time.time()
-
         # : :type: (int, ScheduledItem)
         next_time, next_item = o.schedule[0]
 
         if next_time < now:
             # Trigger time has passed, so let's run it.
 
-            #: :type: (int, ScheduledItem)
+            # : :type: (int, ScheduledItem)
             next_time, next_item = heapq.heappop(o.schedule)
-            p = _run_module(reporter, next_item.name, next_item.module)
+
+            day_log_dir = get_day_log_dir(log_directory, next_time)
+
+            p = _run_module(
+                reporter,
+                next_item.name,
+                next_item.module,
+                scheduled_time=next_time,
+                log_directory=day_log_dir,
+                lock_directory=lock_directory
+            )
             running_children.add(p)
 
             # Schedule next run for this module

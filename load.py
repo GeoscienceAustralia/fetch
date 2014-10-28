@@ -40,30 +40,28 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, schedule):
+    def __init__(self, directory, rules):
         """
         :type directory: str
-        :type schedule: list of ScheduledItem
+        :type rules: list of ScheduledItem
         """
         super(Config, self).__init__()
         self.directory = directory
-        self.schedule = schedule
+        self.rules = rules
 
 
-def _parse_config_dict(schedule):
+def _parse_config_dict(config):
     """
 
     :rtype: list of ScheduledItem
     """
-    directory = schedule['directory']
-    # : :type: dict of (str, dict)
-    rules = schedule['rules']
+    directory = config['directory']
 
-    schedule = []
-    for name, fields in rules.iteritems():
-        schedule.append(ScheduledItem(name, fields['schedule'], fields['source']))
+    rules = []
+    for name, fields in config['rules'].iteritems():
+        rules.append(ScheduledItem(name, fields['schedule'], fields['source']))
 
-    return Config(directory, schedule)
+    return Config(directory, rules)
 
 
 def _init_yaml_handling():

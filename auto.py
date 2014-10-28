@@ -47,31 +47,6 @@ class _PrintReporter(FetchReporter):
         _log.info('Error (%r): %r)', uri, message)
 
 
-def _schedule_item(schedule, now, item):
-    """
-
-    :type schedule: list of (float, ScheduledItem)
-    :param now: float
-    :param item: ScheduledItem
-    :return:
-    """
-    next_trigger = croniter(item.cron_pattern, start_time=now).get_next()
-    heapq.heappush(schedule, (next_trigger, item))
-    return next_trigger
-
-
-def _build_schedule(items):
-    """
-    :type items: list of ScheduledItem
-    """
-    scheduled = []
-    now = time.time()
-    for scheduled_item in items:
-        _schedule_item(scheduled, now, scheduled_item)
-
-    return scheduled
-
-
 def _can_lock(lock_file):
     """
     Use the given file as a lock.
@@ -118,6 +93,7 @@ def _run_module(reporter, name, module, scheduled_time, log_directory, lock_dire
     :type module: DataSource
     :rtype: multiprocessing.Process
     """
+
     def _run_proc(reporter, readable_name, module, log_file, lock_file):
         """
         (from a new process), run the given module.
@@ -247,35 +223,107 @@ def get_day_log_dir(log_directory, time_secs):
     return day_log_dir
 
 
+def _on_shutdown(running_children):
+    # Shut down -- Join all children.
+    all_children = running_children.union(multiprocessing.active_children())
+    _log.info('Shutting down. Joining %r children', len(all_children))
+    for p in all_children:
+        p.join()
+        _on_child_finish(p)
+
+
+class Schedule(object):
+    """
+    Track scheduled items.
+
+    Keeps items ordered by date so the next item can be easily retrieved.
+    """
+    def __init__(self, items):
+        """
+        :type items: list of ScheduledItem
+        """
+        self.schedule = []
+        now = time.time()
+        for scheduled_item in items:
+            self.add_item(scheduled_item, base_date=now)
+
+    def peek_next(self):
+        """
+        See the next scheduled item without removing it.
+        :rtype: (float, ScheduledItem)
+        """
+        return self.schedule[0]
+
+    def pop_next(self):
+        """
+        Remove the next scheduled item.
+        :rtype: (float, ScheduledItem)
+        """
+        return heapq.heappop(self.schedule)
+
+    def add_item(self, item, base_date=None):
+        """
+        Add item to the schedule, with an optional base date.
+        :type base_date: float
+        :type item: ScheduledItem
+        :return:
+        """
+        if base_date is None:
+            base_date = time.time()
+
+        next_trigger = croniter(item.cron_pattern, start_time=base_date).get_next()
+        heapq.heappush(self.schedule, (next_trigger, item))
+        return next_trigger
+
+
+class RunConfig(object):
+    """
+    Runtime configuration.
+    """
+    def __init__(self):
+        self.are_exiting = False
+        #: :type: Schedule
+        self.schedule = None
+
+        self.base_directory = None
+        self.log_directory = None
+        self.lock_directory = None
+
+    def reload(self):
+        """
+        Reload configuration
+        """
+        config = load_config()
+        self.schedule = Schedule(config.rules)
+        self.base_directory = config.directory
+
+        # Cannot change lock directory 'live'
+        if not self.lock_directory:
+            self.lock_directory = os.path.join(self.base_directory, 'lock')
+            if not os.path.exists(self.lock_directory):
+                os.makedirs(self.lock_directory)
+
+        self.log_directory = os.path.join(self.base_directory, 'log')
+        if not os.path.exists(self.log_directory):
+            os.makedirs(self.log_directory)
+
+
 def run_loop():
     """
     Main loop
     """
 
-    class RunState(object):
-        """
-        Workaround for python 2's lack of 'nonlocal'.
-        Contains vars that we change within signal handlers.
-        """
-
-        def __init__(self):
-            self.exiting = False
-            self.schedule = []
-            self.base_directory = None
-
-    o = RunState()
+    o = RunConfig()
 
     def _reload_config():
         """Reload configuration."""
         _log.info('Reloading configuration')
-        config = load_config()
-        o.schedule = _build_schedule(config.schedule)
-        o.base_directory = config.directory
-        _log.debug('%s rules loaded', len(o.schedule))
+        o.reload()
+        _log.debug('%s rules loaded', len(o.schedule.schedule))
 
     def trigger_exit(signal_, frame_):
         """Start a graceful shutdown"""
-        o.exiting = True
+        o.are_exiting = True
 
     def trigger_reload(signal_, frame_):
         """Handle signal to reload config"""
@@ -286,20 +334,13 @@ def run_loop():
     if not os.path.exists(o.base_directory):
         raise ValueError('Configured base folder does not exist: %r' % o.base_directory)
 
-    # Cannot change these values 'live' (config reload).
-    lock_directory = os.path.join(o.base_directory, 'lock')
-    if not os.path.exists(lock_directory):
-        os.makedirs(lock_directory)
-    log_directory = os.path.join(o.base_directory, 'log')
-    if not os.path.exists(log_directory):
-        os.makedirs(log_directory)
-
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     reporter = _PrintReporter()
+    # Keep track of running children to view their exit codes later.
     running_children = set()
 
-    while not o.exiting:
+    while not o.are_exiting:
         running_children = _filter_finished_children(running_children)
 
         # active_children() also cleans up zombie subprocesses.
@@ -313,48 +354,41 @@ def run_loop():
             continue
 
         now = time.time()
-        # : :type: (int, ScheduledItem)
-        next_time, next_item = o.schedule[0]
+        # Pick the first from the sorted list (ie. the closest to now)
+        scheduled_time, scheduled_item = o.schedule.peek_next()
 
-        if next_time < now:
+        if scheduled_time < now:
             # Trigger time has passed, so let's run it.
 
-            # : :type: (int, ScheduledItem)
-            next_time, next_item = heapq.heappop(o.schedule)
-
-            day_log_dir = get_day_log_dir(log_directory, next_time)
+            scheduled_time, scheduled_item = o.schedule.pop_next()
 
             p = _run_module(
                 reporter,
-                next_item.name,
-                next_item.module,
-                scheduled_time=next_time,
-                log_directory=day_log_dir,
-                lock_directory=lock_directory
+                scheduled_item.name,
+                scheduled_item.module,
+                scheduled_time=scheduled_time,
+                # Use a unique log directory for each day
+                log_directory=get_day_log_dir(o.log_directory, scheduled_time),
+                lock_directory=o.lock_directory
             )
             running_children.add(p)
 
             # Schedule next run for this module
-            next_trigger = _schedule_item(o.schedule, now, next_item)
+            next_trigger = o.schedule.add_item(scheduled_item, base_date=now)
 
             _log.debug('Next trigger in %.1f minutes', next_trigger - now)
         else:
             # Sleep until next action is ready.
-            sleep_seconds = (next_time - now) + 0.1
-            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, next_item.name)
+            sleep_seconds = (scheduled_time - now) + 0.1
+            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, scheduled_item.name)
             time.sleep(sleep_seconds)
 
-    # Shut down -- Join all children.
-    all_children = running_children.union(multiprocessing.active_children())
-    _log.info('Shutting down. Joining %r children', len(all_children))
-    for p in all_children:
-        p.join()
-        _on_child_finish(p)
+    _on_shutdown(running_children)
+
 
 _log_handler = logging.StreamHandler(stream=sys.stderr)
 _log_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _log_handler.setFormatter(_log_formatter)
-
 
 if __name__ == '__main__':
     logging.getLogger().addHandler(_log_handler)

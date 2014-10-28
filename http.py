@@ -10,7 +10,7 @@ import feedparser
 from lxml import etree
 from urlparse import urljoin
 
-from . import DataSource, fetch_file
+from . import DataSource, fetch_file, RemoteFetchException
 
 
 _log = logging.getLogger(__name__)
@@ -42,8 +42,9 @@ def _fetch_file(target_dir, target_name, reporter, url, override_existing=False,
         """Fetch data to filename t"""
         with closing(requests.get(url, stream=True)) as res:
             if res.status_code != 200:
+                body = res.text
                 _log.debug('Received text %r', res.text)
-                reporter.file_error(url, "Status code %r" % res.status_code)
+                reporter.file_error(url, "Status code %r" % res.status_code, body)
                 return
 
             with open(t, 'wb') as f:
@@ -118,9 +119,12 @@ class HttpListingSource(DataSource):
             return
 
         if res.status_code != 200:
-            _log.debug('Received text %r', res.text)
-            reporter.file_error(self.url, "Status code %r" % res.status_code)
-            return
+            # We don't bother with reporter.file_error() as this initial fetch is critical.
+            # Throw an exception instead.
+            raise RemoteFetchException(
+                "Status code %r" % res.status_code,
+                '{url}\n\n{body}'.format(url=self.url, body=res.text)
+            )
 
         page = etree.fromstring(res.text, parser=etree.HTMLParser())
         url = res.url
@@ -128,7 +132,7 @@ class HttpListingSource(DataSource):
         anchors = page.xpath('//a')
 
         for anchor in anchors:
-            #: :type: str
+            # : :type: str
             name = anchor.text
             source_url = urljoin(url, anchor.attrib['href'])
 
@@ -178,9 +182,12 @@ class RssSource(DataSource):
         res = requests.get(self.url)
 
         if res.status_code != 200:
-            _log.debug('Received text %r', res.text)
-            reporter.file_error(self.url, "Status code %r" % res.status_code)
-            return
+            # We don't bother with reporter.file_error() as this initial fetch is critical.
+            # Throw an exception instead.
+            raise RemoteFetchException(
+                "Status code %r" % res.status_code,
+                '{url}\n\n{body}'.format(url=self.url, body=res.text)
+            )
 
         feed = feedparser.parse(res.text)
 

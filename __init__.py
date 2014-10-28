@@ -10,6 +10,7 @@ import os
 import re
 import logging
 import tempfile
+from email.mime.text import MIMEText
 
 _log = logging.getLogger(__name__)
 
@@ -42,22 +43,24 @@ class DataSource(object):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
 
 
+class RemoteFetchException(Exception):
+    """
+    A failure while retrieving a remote file.
+    """
+    pass
+
+
 class FetchReporter(object):
     """
     A series of callbacks to report on the status of downloads.
     """
 
-    def __init__(self):
-        """
-        Base class constructor.
-        """
-        super(FetchReporter, self).__init__()
-
-    def file_error(self, uri, message):
+    def file_error(self, uri, summary, body):
         """
         Call on failure of a file.
         :type uri: str
-        :type message: str
+        :type summary: str
+        :type body: str
         """
         pass
 
@@ -95,12 +98,15 @@ class FilenameTransform(object):
     def transform_filename(self, source_filename):
         """
         Modify output filename
+        :type source_filename: str
         """
         return source_filename
 
     def transform_output_path(self, output_path, source_filename):
         """
         Modify output folder path
+        :type source_filename: str
+        :type output_path: str
         """
         return output_path
 
@@ -181,6 +187,9 @@ class DateFilenameTransform(FilenameTransform):
         self.fixed_date = fixed_date
 
     def transform_filename(self, source_filename):
+        """
+        :type source_filename: str
+        """
         day = self.fixed_date if self.fixed_date else datetime.datetime.utcnow()
         date_params = {
             'year': day.strftime('%Y'),
@@ -246,7 +255,7 @@ def fetch_file(uri,
         size_bytes = os.path.getsize(t)
         if size_bytes == 0:
             _log.debug('Empty file returned for file %r', uri)
-            reporter.file_error(uri, "Empty return")
+            reporter.file_error(uri, "Empty file")
             return
 
         # Move to destination
@@ -297,6 +306,9 @@ class RsyncMirrorSource(DataSource):
         self.target_path = target_path
 
     def trigger(self, reporter):
+        """
+        :type reporter: FetchReporter
+        """
         transferred_files = files.rsync(
             self.source_path,
             self.target_path,
@@ -334,6 +346,7 @@ class DateRangeSource(DataSource):
     def trigger(self, reporter):
         """
         Run the DataSource prototype once for each date in the range.
+        :type reporter: FetchReporter
         """
         for day in _date_range(self.start_day, self.end_day):
             date_params = {
@@ -356,8 +369,15 @@ class TaskFailureListener(object):
     """
     Interface for listening to failures.
     """
-    def on_failure(self, process):
+    def on_file_failure(self, process_name, file_uri, summary, body_text):
         """
+        On failure of a file download
+        """
+        pass
+
+    def on_process_failure(self, process):
+        """
+        On process failure (Eg. error return code)
         :type process: ScheduledProcess
         """
         pass
@@ -374,27 +394,46 @@ class TaskFailureEmailer(TaskFailureListener):
         """
         self.addresses = addresses
 
-    def on_failure(self, process):
+    def on_file_failure(self, process_name, file_uri, summary, body_text):
+        """
+        Send mail on a
+        :param process_name:
+        :param file_uri:
+        :param summary:
+        :param body_text:
+        :return:
+        """
+        self._send_mail(
+            'uri: {uri}\n{summary}\n\n{body}'.format(
+                uri=file_uri,
+                summary=summary,
+                body=body_text
+            ),
+            process_name
+        )
+
+    def on_process_failure(self, process):
         """
         :type process: ScheduledProcess
         """
-
-        # Import the email modules we'll need
-        from email.mime.text import MIMEText
-
         with open(process.log_file, 'rb') as f:
-            msg = MIMEText(f.readall())
+            msg = f.read()
 
+        self._send_mail(msg, process.name)
+
+    def _send_mail(self, body_text, process_name):
         hostname = socket.getfqdn()
-
+        msg = MIMEText(body_text)
         msg['Subject'] = '{name} failure on {hostname}'.format(
-            name=process.name,
+            name=process_name,
             hostname=hostname
         )
-        from_address = 'fetch-{pid}@{hostname}'.format(pid=multiprocessing.current_process().pid, hostname=hostname)
+        from_address = 'fetch-{pid}@{hostname}'.format(
+            pid=multiprocessing.current_process().pid,
+            hostname=hostname
+        )
         msg['from'] = from_address
-        msg['to'] = self.addresses
-
+        msg['to'] = ", ".join(self.addresses)
         s = smtplib.SMTP('localhost')
         s.sendmail(
             from_address,

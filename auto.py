@@ -167,8 +167,12 @@ def _on_child_finish(child, notifiers):
             'Error return code %s from %r. Output logged to %r',
             exit_code, child.name, child.log_file
         )
-        for n in notifiers:
-            n.on_failure(child)
+
+        # Negative exit code means they were kill by a signal -- most likely shutdown.
+        # Ignore them for now.
+        if exit_code > 0:
+            for n in notifiers:
+                n.on_process_failure(child)
 
 
 def _filter_finished_children(running_children, notifiers):
@@ -299,6 +303,7 @@ class RunConfig(object):
         self.base_directory = None
         self.log_directory = None
         self.lock_directory = None
+        #: :type: list of onreceipt.fetch.TaskFailureListener
         self.notifiers = []
 
     def load(self):
@@ -327,10 +332,18 @@ class RunConfig(object):
             os.makedirs(self.log_directory)
 
 
-class PrintReporter(FetchReporter):
+class FileCompletionReporter(FetchReporter):
     """
-    Print events to the log.
+    For now, we print events to the log.
     """
+
+    def __init__(self, config):
+        """
+        :type config: RunConfig
+        """
+        super(FileCompletionReporter, self).__init__()
+        self.config = config
+
     def file_complete(self, source_uri, path):
         """
         :type source_uri: str
@@ -339,12 +352,17 @@ class PrintReporter(FetchReporter):
         """
         _log.info('Completed %r: %r -> %r', os.path.basename(path), source_uri, path)
 
-    def file_error(self, uri, message):
+    def file_error(self, uri, summary, body):
         """
         :type uri: str
-        :type message: str
+        :type summary: str
+        :type body: str
         """
-        _log.info('Error (%r): %r', uri, message)
+        _log.info('Error (%r): %s', uri, summary)
+        _log.debug('Error body: %r', body)
+
+        for n in self.config.notifiers:
+            n.on_file_failure(None, uri, summary, body)
 
 
 def run_loop():
@@ -367,7 +385,7 @@ def run_loop():
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     # TODO: Report arriving ancillary files on the message bus.
-    reporter = PrintReporter()
+    reporter = FileCompletionReporter(o)
 
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor

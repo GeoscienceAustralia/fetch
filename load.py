@@ -40,7 +40,7 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, rules):
+    def __init__(self, directory, rules, notify_addresses):
         """
         :type directory: str
         :type rules: list of ScheduledItem
@@ -48,6 +48,7 @@ class Config(object):
         super(Config, self).__init__()
         self.directory = directory
         self.rules = rules
+        self.notify_addresses = notify_addresses
 
 
 def _parse_config_dict(config):
@@ -56,12 +57,13 @@ def _parse_config_dict(config):
     :rtype: list of ScheduledItem
     """
     directory = config['directory']
+    notify_email_addresses = config['notify']['email']
 
     rules = []
     for name, fields in config['rules'].iteritems():
         rules.append(ScheduledItem(name, fields['schedule'], fields['source']))
 
-    return Config(directory, rules)
+    return Config(directory, rules, notify_email_addresses)
 
 
 def _init_yaml_handling():
@@ -159,7 +161,10 @@ def dump_old_schedule():
     # Dump / Load / Dump to test our routines.
     schedule = {
         'directory': '/tmp/anc-fetch',
-        'rules': _old_schedule()
+        'rules': _old_schedule(),
+        'notify': {
+            'email': ['jeremy.hooke@ga.gov.au']
+        }
     }
     doc = yaml.dump(schedule, default_flow_style=False)
     new_rules = yaml.load(doc)

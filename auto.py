@@ -19,32 +19,11 @@ import signal
 from croniter import croniter
 from setproctitle import setproctitle
 
-from . import FetchReporter
+from . import FetchReporter, TaskFailureEmailer
 from .load import load_config
 
 
 _log = logging.getLogger(__name__)
-
-
-class _PrintReporter(FetchReporter):
-    """
-    Print events to the log.
-    """
-
-    def file_complete(self, source_uri, path):
-        """
-        :type source_uri: str
-        :type source_uri: str
-        :type path: str
-        """
-        _log.info('Completed %r: %r -> %r', os.path.basename(path), source_uri, path)
-
-    def file_error(self, uri, message):
-        """
-        :type uri: str
-        :type message: str
-        """
-        _log.info('Error (%r): %r', uri, message)
 
 
 def _attempt_lock(lock_file):
@@ -107,11 +86,12 @@ class ScheduledProcess(multiprocessing.Process):
     """
     A subprocess to run a module.
     """
+
     def __init__(self, reporter, name, module, scheduled_time, log_directory, lock_directory):
         """
-        :type reporter: FetchReporter
+        :type reporter: onreceipt.fetch.FetchReporter
         :type name: str
-        :type module: DataSource
+        :type module: onreceipt.fetch.DataSource
         :type scheduled_time: float
         :type log_directory: str
         :type lock_directory: str
@@ -168,11 +148,12 @@ def _init_signals(trigger_exit=None, trigger_reload=None):
     signal.signal(signal.SIGHUP, trigger_reload if trigger_reload else signal.SIG_DFL)
 
 
-def _on_child_finish(child):
+def _on_child_finish(child, notifiers):
     """
     Handle child process cleanup: Check for errors.
 
     :type child: ScheduledProcess
+    :type notifiers: list of onreceipt.fetch.TaskFailureListener
     """
     exit_code = child.exitcode
     if exit_code is None:
@@ -181,12 +162,16 @@ def _on_child_finish(child):
 
     _log.debug('Child finished %r %r', child.name, child.pid)
 
-    # TODO: Send mail, alert or something?
     if exit_code != 0:
-        _log.error('Error return code %s from %r. Output logged to %r', exit_code, child.name, child.log_file)
+        _log.warn(
+            'Error return code %s from %r. Output logged to %r',
+            exit_code, child.name, child.log_file
+        )
+        for n in notifiers:
+            n.on_failure(child)
 
 
-def _filter_finished_children(running_children):
+def _filter_finished_children(running_children, notifiers):
     """
     Filter and check the exit codes of finished children.
 
@@ -201,7 +186,7 @@ def _filter_finished_children(running_children):
             still_running.add(child)
             continue
 
-        _on_child_finish(child)
+        _on_child_finish(child, notifiers)
 
     return still_running
 
@@ -244,7 +229,7 @@ def get_day_log_dir(log_directory, time_secs):
     return day_log_dir
 
 
-def _on_shutdown(running_children):
+def _on_shutdown(running_children, notifiers):
     """
     :type running_children: set of ScheduledProcess
     """
@@ -253,7 +238,7 @@ def _on_shutdown(running_children):
     _log.info('Shutting down. Joining %r children', len(all_children))
     for p in all_children:
         p.join()
-        _on_child_finish(p)
+        _on_child_finish(p, notifiers)
 
 
 class Schedule(object):
@@ -262,6 +247,7 @@ class Schedule(object):
 
     Keeps items ordered by date so the next item can be easily retrieved.
     """
+
     def __init__(self, items):
         """
         :type items: list of ScheduledItem
@@ -304,14 +290,16 @@ class RunConfig(object):
     """
     Runtime configuration.
     """
+
     def __init__(self):
         self.are_exiting = False
-        #: :type: Schedule
+        # : :type: Schedule
         self.schedule = None
 
         self.base_directory = None
         self.log_directory = None
         self.lock_directory = None
+        self.notifiers = []
 
     def load(self):
         """
@@ -320,6 +308,10 @@ class RunConfig(object):
         config = load_config()
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
+
+        self.notifiers = []
+        if config.notify_addresses:
+            self.notifiers.append(TaskFailureEmailer(config.notify_addresses))
 
         if not os.path.exists(self.base_directory):
             raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
@@ -333,6 +325,26 @@ class RunConfig(object):
         self.log_directory = os.path.join(self.base_directory, 'log')
         if not os.path.exists(self.log_directory):
             os.makedirs(self.log_directory)
+
+
+class PrintReporter(FetchReporter):
+    """
+    Print events to the log.
+    """
+    def file_complete(self, source_uri, path):
+        """
+        :type source_uri: str
+        :type source_uri: str
+        :type path: str
+        """
+        _log.info('Completed %r: %r -> %r', os.path.basename(path), source_uri, path)
+
+    def file_error(self, uri, message):
+        """
+        :type uri: str
+        :type message: str
+        """
+        _log.info('Error (%r): %r', uri, message)
 
 
 def run_loop():
@@ -354,14 +366,15 @@ def run_loop():
 
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
-    reporter = _PrintReporter()
+    # TODO: Report arriving ancillary files on the message bus.
+    reporter = PrintReporter()
 
     # Keep track of running children to view their exit codes later.
-    #: :type: set of ScheduledProcessor
+    # : :type: set of ScheduledProcessor
     running_children = set()
 
     while not o.are_exiting:
-        running_children = _filter_finished_children(running_children)
+        running_children = _filter_finished_children(running_children, o.notifiers)
 
         # active_children() also cleans up zombie subprocesses.
         child_count = len(multiprocessing.active_children())
@@ -403,7 +416,7 @@ def run_loop():
             _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, scheduled_item.name)
             time.sleep(sleep_seconds)
 
-    _on_shutdown(running_children)
+    _on_shutdown(running_children, o.notifiers)
 
 
 _LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)

@@ -2,6 +2,9 @@
 A package for automatically fetching files (eg. Ancillary).
 """
 import datetime
+import multiprocessing
+import smtplib
+import socket
 from neocommon import files, Uri
 import os
 import re
@@ -307,7 +310,6 @@ class RsyncMirrorSource(DataSource):
         )
 
 
-
 class DateRangeSource(DataSource):
     """
     Repeat a source multiple times with different dates.
@@ -348,3 +350,55 @@ class DateRangeSource(DataSource):
 
             _log.info('Triggering %r', self.using)
             self.using.trigger(reporter)
+
+
+class TaskFailureListener(object):
+    """
+    Interface for listening to failures.
+    """
+    def on_failure(self, process):
+        """
+        :type process: ScheduledProcess
+        """
+        pass
+
+
+class TaskFailureEmailer(TaskFailureListener):
+    """
+    Send failure information via email
+    """
+
+    def __init__(self, addresses):
+        """
+        :type addresses: list of str
+        """
+        self.addresses = addresses
+
+    def on_failure(self, process):
+        """
+        :type process: ScheduledProcess
+        """
+
+        # Import the email modules we'll need
+        from email.mime.text import MIMEText
+
+        with open(process.log_file, 'rb') as f:
+            msg = MIMEText(f.readall())
+
+        hostname = socket.getfqdn()
+
+        msg['Subject'] = '{name} failure on {hostname}'.format(
+            name=process.name,
+            hostname=hostname
+        )
+        from_address = 'fetch-{pid}@{hostname}'.format(pid=multiprocessing.current_process().pid, hostname=hostname)
+        msg['from'] = from_address
+        msg['to'] = self.addresses
+
+        s = smtplib.SMTP('localhost')
+        s.sendmail(
+            from_address,
+            self.addresses,
+            msg.as_string()
+        )
+        s.quit()

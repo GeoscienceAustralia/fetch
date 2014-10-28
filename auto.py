@@ -10,6 +10,7 @@ complicated scripts with a single, central configuration file.
 import fcntl
 import logging
 import os
+import stat
 import sys
 import heapq
 import time
@@ -71,6 +72,29 @@ def _build_schedule(items):
     return scheduled
 
 
+def _can_lock(lock_file):
+    """
+    Use the given file as a lock.
+
+    Return true if successful.
+
+    :type lock_file: str
+    :rtype: bool
+    """
+    umask_original = os.umask(0)
+    try:
+        fp = os.open(lock_file, os.O_WRONLY | os.O_CREAT, stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+    finally:
+        os.umask(umask_original)
+
+    try:
+        fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        return False
+
+    return True
+
+
 def _run_module(reporter, name, module, scheduled_time, log_directory, lock_directory):
     """
     Run the given module in a subprocess
@@ -92,12 +116,9 @@ def _run_module(reporter, name, module, scheduled_time, log_directory, lock_dire
         sys.stdout = output
         sys.stderr = output
 
-        fp = open(lock_file, 'w')
-        try:
-            fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
+        if not _can_lock(lock_file):
             _log.debug('Lock is activated. Skipping run. %r', readable_name)
-            return
+            sys.exit(0)
 
         setproctitle(readable_name)
         _init_signals()

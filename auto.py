@@ -360,7 +360,8 @@ if __name__ == '__main__':
     logging.getLogger().addHandler(_log_handler)
     logging.getLogger().setLevel(logging.WARNING)
 
-    _log.setLevel(logging.DEBUG)
     logging.getLogger('onreceipt').setLevel(logging.INFO)
+    logging.getLogger('onreceipt.fetch').setLevel(logging.INFO)
+    _log.setLevel(logging.DEBUG)
 
     run_loop()

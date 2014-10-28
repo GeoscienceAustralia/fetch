@@ -19,7 +19,7 @@ import signal
 from croniter import croniter
 from setproctitle import setproctitle
 
-from . import DataSource, FetchReporter
+from . import FetchReporter
 from .load import load_config
 
 
@@ -79,9 +79,9 @@ def _redirect_output(log_file):
     output = open(log_file, 'w')
     sys.stdout = output
     sys.stderr = output
-    logging.getLogger().removeHandler(_log_handler)
+    logging.getLogger().removeHandler(_LOG_HANDLER)
     handler = logging.StreamHandler(stream=output)
-    handler.setFormatter(_log_formatter)
+    handler.setFormatter(_LOG_FORMATTER)
     logging.getLogger().addHandler(handler)
 
 
@@ -406,12 +406,12 @@ def run_loop():
     _on_shutdown(running_children)
 
 
-_log_handler = logging.StreamHandler(stream=sys.stderr)
-_log_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-_log_handler.setFormatter(_log_formatter)
+_LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
+_LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+_LOG_HANDLER.setFormatter(_LOG_FORMATTER)
 
 if __name__ == '__main__':
-    logging.getLogger().addHandler(_log_handler)
+    logging.getLogger().addHandler(_LOG_HANDLER)
     logging.getLogger().setLevel(logging.WARNING)
 
     logging.getLogger('onreceipt').setLevel(logging.INFO)

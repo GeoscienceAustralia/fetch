@@ -134,7 +134,7 @@ class ScheduledProcess(multiprocessing.Process):
             self.module.trigger(self.reporter)
         except RemoteFetchException as e:
             print '-' * 10
-            print e.summary
+            print e.message
             print '-' * 10
             print e.detailed
             sys.exit(1)

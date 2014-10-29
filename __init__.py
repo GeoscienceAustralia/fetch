@@ -49,7 +49,7 @@ class RemoteFetchException(Exception):
     """
 
     def __init__(self, summary, detailed):
-        self.summary = summary
+        super(RemoteFetchException, self).__init__(summary)
         self.detailed = detailed
 
 

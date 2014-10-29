@@ -36,13 +36,14 @@ An example configuration file:
           url: http://landsat.usgs.gov/cpf.rss
           target_dir: /eoancillarydata/sensor-specific/LANDSAT8/CalibrationParameterFile
 
-The first two options (`directory:` and `notify:`) specify the work directory for the daemon (lock and log files) 
-and notification settings for errors.
+`directory:` specifies the work directory for the daemon lock and log files.
+
+`notify:` allows configuration of error notification.
  
 The third option contains download rules (`rules:`).
  
-- In this case there are two rules specified: One http download of utcpole/leapsec files, 
-and RSS feed download.
+- In this case there are two rules specified: one http download of utcpole/leapsec files, 
+and an RSS feed download of CPF files.
 
 - Rules are prefixed by a name: in the above example they are named `Modis utcpole-leapsec` and 
 `LS8 CPF`. 
@@ -52,16 +53,17 @@ and RSS feed download.
 - The `source:` property is our download source for the rule. It is tagged with a YAML type (`!rss` or `!http-files` in this example)
 to specify the type of downloader.
 
-- Each downloader has properties to set: Usually the URL to download from, and target directories for the files.
+- Each downloader has properties: Usually the URL to download from, and a target directory to put the files.
 
 ### Download sources
+
+Types of downloaders:
 
 #### !http-files
 
 Fetch static HTTP URLs.
 
-This is useful for unchanging URLs that need to be
-repeatedly updated.
+This is useful for unchanging URLs that need to be repeatedly updated.
 
 Example:
 
@@ -87,8 +89,7 @@ Like http-files, but for FTP.
 
 Fetch files from a HTTP listing page.
 
-A ([regexp](https://docs.python.org/2/howto/regex.html#regex-howto)) pattern can be specified to only download certain
-filenames.
+A ([regexp](https://docs.python.org/2/howto/regex.html#regex-howto)) pattern can be specified to only download certain filenames.
 
     source: !http-directory
         url: http://rhe-neo-dev03/ancillary/gdas
@@ -114,3 +115,76 @@ Download files from an RSS feed.
     source: !rss
       url: http://landsat.usgs.gov/cpf.rss
       target_dir: /eoancillarydata/sensor-specific/LANDSAT8/CalibrationParameterFile
+
+### Transformers
+
+Transformers allow for dynamic folder and file names (both sources and destinations).
+
+Downloaders supporting them have a `filename-transform:` property.
+ 
+#### !date-pattern
+
+Put the current date/time in the filename. 
+
+This takes a [format](https://docs.python.org/2/library/string.html#formatstrings) string with properties 'year', 'month', 'day', 'julday' (Julian day) and 'filename' (the original filename)
+
+Example of an FTP download
+
+    source: !ftp-files
+      hostname: is.sci.gsfc.nasa.gov
+      paths:
+      - /ancillary/ephemeris/tle/noaa/noaa.tle
+      target_dir: /eoancillarydata/sensor-specific/NOAA/tle
+      # Prepend the current date to the output filename (eg. '20141024.noaa.tle')
+      filename_transform: !date-pattern '{year}{month}{day}.{filename}'
+
+
+#### !regexp-extract
+
+Extract fields from a filename, and use them in the destination filenames.
+
+(This requires knowledge of [regular expressions](https://docs.python.org/2/howto/regex.html#regex-howto))
+
+A regexp pattern is supplied with named groups. Those group names can then be used in folder names.
+
+In this example, we have a pattern with three regexp groups: 'year', 'month' and 'day'. We use
+them in the `target_dir`.
+
+    LS8 BPF:
+    schedule: '*/15 * * * *'
+    source: !rss
+      url: http://landsat.usgs.gov/bpf.rss
+      target_dir: /eoancillarydata/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}
+      # Extract year and month from filenames to use in target directory
+      #    Example filename: 'LT8BPF20141028232827_20141029015842.01'
+      filename_transform: !regexp-extract 'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
+
+
+
+### Date patterns: !date-pattern
+
+Date pattern repeats a download source multiple times over a date range.
+
+It takes a `start_day` number and an `end_day` number. These are relative to the current
+day: Ie. A start day of -3 means three days ago.
+
+Example:
+
+    Modis Att-Ephem:
+    schedule: '20 */2 * * *'
+    source: !date-range
+      start_day: -3
+      end_day: 0
+      overridden_properties:
+        url: http://oceandata.sci.gsfc.nasa.gov/Ancillary/Attitude-Ephemeris/{year}/{julday}
+        target_dir: /eoancillarydata/sensor-specific/MODIS/ancillary/{year}/{julday}
+      using: !http-directory
+        name_pattern: '[AP]M1(ATT|EPH).*'
+        # Overridden by the property above
+        url: ''
+        # Overridden by the property above
+        target_dir: ''
+        
+This expands to four `!http-directory` downloaders. Three days ago, two days ago, one day ago and today.
+
+The properties in `overridden_properties:` are formatted with the given date and set on each `!http-directory` downloader.

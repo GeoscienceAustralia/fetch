@@ -15,7 +15,21 @@ from email.mime.text import MIMEText
 _log = logging.getLogger(__name__)
 
 
-class DataSource(object):
+class SimpleObject(object):
+    """
+    An object with direct mapping between constructor arguments and properties.
+    """
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.__dict__)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        else:
+            return False
+
+
+class DataSource(SimpleObject):
     """
     A base class for data downloaders.
 
@@ -38,9 +52,6 @@ class DataSource(object):
         :return:
         """
         raise NotImplementedError("Trigger was not overridden")
-
-    def __repr__(self):
-        return '%s(%r)' % (self.__class__.__name__, self.__dict__)
 
 
 class RemoteFetchException(Exception):
@@ -88,7 +99,7 @@ class FetchReporter(object):
         pass
 
 
-class FilenameTransform(object):
+class FilenameTransform(SimpleObject):
     """
     A base class for objects that modify output filenames and directories.
 

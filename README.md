@@ -8,7 +8,7 @@ It is run with one argument: a config file location
 
 ## Configuration file
 
-Configuration files are loaded in [YAML](http://www.yaml.org/) format 
+Configuration files are loaded in [YAML](https://en.wikipedia.org/wiki/YAML) format 
 (essentially nested lists and dictionaries: YAML is a superset of JSON).
 
 An example configuration file:

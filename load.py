@@ -6,6 +6,7 @@ import functools
 
 from . import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource
+import os
 import yaml
 import yaml.resolver
 
@@ -25,13 +26,16 @@ class ScheduledItem(object):
         self.module = module
 
 
-def load_config():
+def load_yaml(file_path):
     """
     Load configuration.
 
     :rtype: Config
     """
-    conf_dict = yaml.load(open('test-config.yaml', 'r'))
+    if not os.path.exists(file_path):
+        raise ValueError('Config path does not exist: %r', file_path)
+
+    conf_dict = yaml.load(open(file_path, 'r'))
     return _parse_config_dict(conf_dict)
 
 

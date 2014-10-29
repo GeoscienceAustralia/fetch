@@ -20,7 +20,7 @@ from croniter import croniter
 from setproctitle import setproctitle
 
 from . import FetchReporter, TaskFailureEmailer, RemoteFetchException
-from .load import load_config
+from .load import load_yaml
 
 
 _log = logging.getLogger(__name__)
@@ -299,7 +299,9 @@ class RunConfig(object):
     Runtime configuration.
     """
 
-    def __init__(self):
+    def __init__(self, config_path):
+        self.config_path = config_path
+
         self.are_exiting = False
         # : :type: Schedule
         self.schedule = None
@@ -314,7 +316,8 @@ class RunConfig(object):
         """
         Reload configuration
         """
-        config = load_config()
+        config = load_yaml(self.config_path)
+
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
 
@@ -369,11 +372,11 @@ class FileCompletionReporter(FetchReporter):
             notifier.on_file_failure(None, uri, summary, body)
 
 
-def run_loop():
+def run_loop(config_path):
     """
     Main loop
     """
-    o = RunConfig()
+    o = RunConfig(config_path)
     o.load()
 
     def trigger_exit(signal_, frame_):
@@ -453,4 +456,10 @@ if __name__ == '__main__':
     logging.getLogger('onreceipt.fetch').setLevel(logging.INFO)
     _log.setLevel(logging.DEBUG)
 
-    run_loop()
+    if len(sys.argv) != 2:
+        sys.stderr.writelines([
+            'Usage: {} <config.yaml>\n'.format(sys.argv[0])
+        ])
+        sys.exit(1)
+
+    run_loop(sys.argv[1])

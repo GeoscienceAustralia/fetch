@@ -141,14 +141,14 @@ Example of an FTP download
 
 #### !regexp-extract
 
-Extract fields from a filename, and use them in the destination filenames.
+Extract fields from a filename, and use them in the destination directory.
 
-(This requires knowledge of [regular expressions](https://docs.python.org/2/howto/regex.html#regex-howto))
+(This requires knowledge of [regular expressions](https://docs.python.org/2/howto/regex.html#regex-howto) including named groups)
 
-A regexp pattern is supplied with named groups. Those group names can then be used in folder names.
+Supply a regexp pattern with named groups. Those group names can then be used in the target folder name.
 
 In this example, we have a pattern with three regexp groups: 'year', 'month' and 'day'. We use
-them in the `target_dir`.
+year and month in the `target_dir`.
 
     LS8 BPF:
     schedule: '*/15 * * * *'
@@ -163,7 +163,7 @@ them in the `target_dir`.
 
 ### Date patterns: !date-pattern
 
-Date pattern repeats a download source multiple times over a date range.
+A `date-pattern` repeats a download source multiple times over a date range.
 
 It takes a `start_day` number and an `end_day` number. These are relative to the current
 day: Ie. A start day of -3 means three days ago.

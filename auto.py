@@ -19,7 +19,7 @@ import signal
 from croniter import croniter
 from setproctitle import setproctitle
 
-from . import FetchReporter, TaskFailureEmailer
+from . import FetchReporter, TaskFailureEmailer, RemoteFetchException
 from .load import load_config
 
 
@@ -130,7 +130,14 @@ class ScheduledProcess(multiprocessing.Process):
 
         setproctitle(self.name)
         _log.debug('Triggering %s: %r', self.name, self.module)
-        self.module.trigger(self.reporter)
+        try:
+            self.module.trigger(self.reporter)
+        except RemoteFetchException as e:
+            print '-' * 10
+            print e.summary
+            print '-' * 10
+            print e.detailed
+            sys.exit(1)
 
 
 def _init_signals(trigger_exit=None, trigger_reload=None):
@@ -168,11 +175,8 @@ def _on_child_finish(child, notifiers):
             exit_code, child.name, child.log_file
         )
 
-        # Negative exit code means they were kill by a signal -- most likely shutdown.
-        # Ignore them for now.
-        if exit_code > 0:
-            for n in notifiers:
-                n.on_process_failure(child)
+        for n in notifiers:
+            n.on_process_failure(child)
 
 
 def _filter_finished_children(running_children, notifiers):
@@ -361,8 +365,8 @@ class FileCompletionReporter(FetchReporter):
         _log.info('Error (%r): %s', uri, summary)
         _log.debug('Error body: %r', body)
 
-        for n in self.config.notifiers:
-            n.on_file_failure(None, uri, summary, body)
+        for notifier in self.config.notifiers:
+            notifier.on_file_failure(None, uri, summary, body)
 
 
 def run_loop():

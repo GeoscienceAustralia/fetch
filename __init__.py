@@ -47,7 +47,10 @@ class RemoteFetchException(Exception):
     """
     A failure while retrieving a remote file.
     """
-    pass
+
+    def __init__(self, summary, detailed):
+        self.summary = summary
+        self.detailed = detailed
 
 
 class FetchReporter(object):
@@ -416,6 +419,12 @@ class TaskFailureEmailer(TaskFailureListener):
         """
         :type process: ScheduledProcess
         """
+
+        # A negative exit code means it was killed via a signal. Probably by the user.
+        # Not worth emailing.
+        if process.exitcode < 0:
+            return
+
         with open(process.log_file, 'rb') as f:
             msg = f.read()
 

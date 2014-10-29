@@ -422,6 +422,10 @@ class TaskFailureEmailer(TaskFailureListener):
         self._send_mail(msg, process.name)
 
     def _send_mail(self, body_text, process_name):
+        """
+        :type body_text: str
+        :type process_name: str
+        """
         hostname = socket.getfqdn()
         msg = MIMEText(body_text)
         msg['Subject'] = '{name} failure on {hostname}'.format(

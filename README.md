@@ -16,7 +16,7 @@ An example configuration file:
     # Work directory:
     directory: /data/ancillary-fetch
     
-    # Notification settings:
+    # Notification settings (for errors):
     notify:
       email: ['jeremy.hooke@ga.gov.au']
       
@@ -55,6 +55,8 @@ and an RSS feed download of CPF files.
 to specify the type of downloader.
 
 - Each downloader has properties: Usually the URL to download from, and a target directory to put the files.
+
+- `schedule:` uses standard cron syntax for the download schedule.
 
 ### Download sources
 

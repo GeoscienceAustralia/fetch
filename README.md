@@ -1,11 +1,12 @@
 # Ancillary fetch daemon
 
-Run with a config file:
+Download ancillary data automatically.
+
+It is run with one argument: a config file location
 
     python -m onreceipt.fetch.auto config.yaml
 
-
-## Configuration
+## Configuration file
 
 Configuration files are loaded in [YAML](http://www.yaml.org/) format 
 (essentially nested lists and dictionaries: YAML is a superset of JSON).
@@ -163,10 +164,12 @@ year and month in the `target_dir`.
 
 ### Date patterns: !date-pattern
 
-A `date-pattern` repeats a download source multiple times over a date range.
+A `date-pattern` is a pseudo download source that repeats a source multiple times over a date range.
 
 It takes a `start_day` number and an `end_day` number. These are relative to the current
 day: Ie. A start day of -3 means three days ago.
+
+It then overrides properties on the embedded source using each date.
 
 Example:
 
@@ -188,3 +191,4 @@ Example:
 This expands to four `!http-directory` downloaders. Three days ago, two days ago, one day ago and today.
 
 The properties in `overridden_properties:` are formatted with the given date and set on each `!http-directory` downloader.
+

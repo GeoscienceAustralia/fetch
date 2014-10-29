@@ -56,16 +56,17 @@ class Config(object):
 
 
 def _load_config_dict(file_io):
+    """Load YAML file into config dict"""
     return yaml.load(file_io)
 
 
 def _dump_config_dict(dic):
+    """Dump a config dict into a YAML string"""
     return yaml.dump(dic, default_flow_style=False)
 
 
 def _parse_config_dict(config):
     """
-
     :rtype: list of ScheduledItem
     """
     directory = config['directory']

@@ -131,13 +131,13 @@ class FtpListingSource(DataSource):
             """Get files that match the name_pattern in the target directory."""
             try:
                 files = ftp.nlst(self.source_dir)
-            except ftplib.error_perm, resp:
+            except ftplib.error_perm as resp:
                 if str(resp) == "550 No files found":
                     _log.info("No files in remote directory")
                     files = []
                 else:
                     raise
-            except ftplib.error_temp, resp:
+            except ftplib.error_temp as resp:
                 if str(resp).strip().startswith('450'):
                     _log.info("No remote directory")
                     files = []

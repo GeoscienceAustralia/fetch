@@ -46,10 +46,9 @@ class DataSource(SimpleObject):
         """
         Trigger a download from the source.
 
-        Abstract method
+        Abstract method.
 
         :type reporter: FetchReporter
-        :return:
         """
         raise NotImplementedError("Trigger was not overridden")
 

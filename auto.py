@@ -7,6 +7,7 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
+from __future__ import print_function
 import fcntl
 import logging
 import os
@@ -128,15 +129,15 @@ class ScheduledProcess(multiprocessing.Process):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
             sys.exit(0)
 
-        setproctitle(self.name)
+        # setproctitle(self.name)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
             self.module.trigger(self.reporter)
         except RemoteFetchException as e:
-            print '-' * 10
-            print e.message
-            print '-' * 10
-            print e.detailed
+            print('-' * 10)
+            print(e.message)
+            print('-' * 10)
+            print(e.detailed)
             sys.exit(1)
 
 
@@ -305,9 +306,11 @@ class RunConfig(object):
         self.are_exiting = False
         # : :type: Schedule
         self.schedule = None
-
+        #: type: str
         self.base_directory = None
+        #: type: str
         self.log_directory = None
+        #: type: str
         self.lock_directory = None
         #: :type: list of onreceipt.fetch.TaskFailureListener
         self.notifiers = []

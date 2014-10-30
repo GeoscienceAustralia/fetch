@@ -129,7 +129,7 @@ class ScheduledProcess(multiprocessing.Process):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
             sys.exit(0)
 
-        # setproctitle(self.name)
+        setproctitle(self.name)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
             self.module.trigger(self.reporter)

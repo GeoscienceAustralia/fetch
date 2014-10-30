@@ -17,8 +17,10 @@ import heapq
 import time
 import multiprocessing
 import signal
-from croniter import croniter
 from setproctitle import setproctitle
+
+import arrow
+from croniter import croniter
 
 from . import FetchReporter, TaskFailureEmailer, RemoteFetchException
 from .load import load_yaml
@@ -171,7 +173,7 @@ def _on_child_finish(child, notifiers):
     _log.debug('Child finished %r %r', child.name, child.pid)
 
     if exit_code != 0:
-        _log.warn(
+        _log.error(
             'Error return code %s from %r. Output logged to %r',
             exit_code, child.name, child.log_file
         )
@@ -306,9 +308,9 @@ class RunConfig(object):
         self.are_exiting = False
         # : :type: Schedule
         self.schedule = None
-        #: type: str
+        # : type: str
         self.base_directory = None
-        #: type: str
+        # : type: str
         self.log_directory = None
         #: type: str
         self.lock_directory = None
@@ -437,11 +439,21 @@ def run_loop(config_path):
             # Schedule next run for this module
             next_trigger = o.schedule.add_item(scheduled_item, base_date=now)
 
-            _log.debug('Next trigger in %.1f minutes', next_trigger - now)
+            _log.debug(
+                'Created child %s. Next %r trigger %s',
+                p.pid,
+                scheduled_item.name,
+                arrow.get(next_trigger).humanize()
+            )
         else:
             # Sleep until next action is ready.
             sleep_seconds = (scheduled_time - now) + 0.1
-            _log.debug('Sleeping for %.1f minutes until action %r', sleep_seconds / 60.0, scheduled_item.name)
+            _log.debug(
+                'Next action %s: %r (sleeping %.2f)',
+                arrow.get(scheduled_time).humanize(),
+                scheduled_item.name,
+                sleep_seconds
+            )
             time.sleep(sleep_seconds)
 
     _on_shutdown(running_children, o.notifiers)

@@ -1,0 +1,30 @@
+*.py[cod]
+__pycache__
+dist
+sdist
+*.so
+pip-log.txt
+.DS_Store
+*.egg
+*.egg-info
+
+# Unit test / coverage reports
+.coverage
+.tox
+nosetests.xml
+
+# PyCharm / IntelliJ
+*.iml
+.idea
+*.ipr
+
+# Eclipse
+.project
+.pydevproject
+
+config.py
+MANIFEST
+log
+venv
+passes.db
+announce.db

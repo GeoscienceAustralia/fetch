@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# This will block and fetch data given a config file.
+
+exec /usr/local/bin/python2.7 -m fetch.auto "$@"

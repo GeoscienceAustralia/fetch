@@ -18,7 +18,7 @@ setup(name='fetch',
           'fetch',
       ],
       scripts=[
-          'bin/or-onprocess'
+          'bin/fetch-service'
       ],
       requires=[
           'neocommon',

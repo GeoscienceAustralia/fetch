@@ -1,5 +1,5 @@
 import unittest
-from onreceipt.fetch import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
+from fetch import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, load
 
 __author__ = 'u63606'

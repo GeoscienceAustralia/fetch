@@ -2,7 +2,7 @@ import unittest
 
 __author__ = 'u63606'
 
-from onreceipt.fetch.auto import _filter_finished_children
+from fetch.auto import _filter_finished_children
 
 
 class TestAuto(unittest.TestCase):

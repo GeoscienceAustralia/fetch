@@ -21,12 +21,13 @@ setup(name='fetch',
           'bin/fetch-service'
       ],
       requires=[
-          'neocommon',
-          'requests',
+          'arrow',
+          'croniter',
           'feedparser',
           'lxml',
-          'setproctitle',
+          'neocommon',
           'pyyaml',
-          'arrow'
+          'requests',
+          'setproctitle',
       ]
 )

@@ -26,6 +26,7 @@ setup(name='fetch',
           'feedparser',
           'lxml',
           'setproctitle',
-          'pyyaml'
+          'pyyaml',
+          'arrow'
       ]
 )

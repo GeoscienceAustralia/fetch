@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
-# This will block and fetch data given a config file.
+# Load such environment vars if present (eg. proxy settings):
+[ -e /etc/neo-env.sh ] && . /etc/neo-env.sh
 
+# This will block and fetch data given a config file.
 exec /usr/local/bin/python2.7 -m fetch.auto "$@"

@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# Load RPM python dependencies from setup.py
+rpm_deps=''
+for package in $(python2.7 setup.py --requires)
+do
+    if [[ "${package}" == "neocommon" ]]
+    then
+        rpm_deps="${rpm_deps} ${package}"
+    else
+        rpm_deps="${rpm_deps} python27-${package}"
+    fi
+done
+
 pkg_version="$(python2.7 ./setup.py --version)"
 
 [ -n $TC_BUILD_NUMBER ] && echo "##teamcity[buildNumber '${pkg_version}']"
@@ -9,6 +21,6 @@ pkg_version="$(python2.7 ./setup.py --version)"
 # is a custom built one.
 
 exec python2.7 ./setup.py bdist_rpm \
-    --requires "python27-requests python27-feedparser python27-lxml neocommon" \
+    --requires "${rpm_deps}" \
     --fix-python
 

@@ -100,23 +100,23 @@ class ScheduledProcess(multiprocessing.Process):
         :type lock_directory: str
         """
         super(ScheduledProcess, self).__init__()
-        _id = _sanitize_for_filename(name)
+        id_ = _sanitize_for_filename(name)
         lock_file = os.path.join(
             lock_directory,
-            '{id}.lck'.format(id=_id)
+            '{id}.lck'.format(id=id_)
         )
         scheduled_time_st = time.strftime('%H%M', time.localtime(scheduled_time))
         log_file = os.path.join(
             log_directory,
             '{time}-{id}.log'.format(
-                id=_id,
+                id=id_,
                 time=scheduled_time_st
             )
         )
 
         self.log_file = log_file
         self.lock_file = lock_file
-        self.id = _id
+        self.id_ = id_
         self.name = 'fetch {} {}'.format(scheduled_time_st, name)
         self.module = module
         self.reporter = reporter
@@ -132,7 +132,7 @@ class ScheduledProcess(multiprocessing.Process):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
             sys.exit(0)
 
-        setproctitle(self.id)
+        setproctitle(self.id_)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
             self.module.trigger(self.reporter)

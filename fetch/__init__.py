@@ -289,11 +289,11 @@ def _date_range(from_days_from_now, to_days_from_now):
     :type to_days_from_now: int
     :rtype: list od datetime.datetime
 
-    >>> len(_date_range(-1, 1))
+    >>> len(list(_date_range(-1, 1)))
     3
-    >>> len(_date_range(0, 1))
+    >>> len(list(_date_range(0, 1)))
     2
-    >>> len(_date_range(-2, 0))
+    >>> len(list(_date_range(-2, 0)))
     3
     """
     start_day = datetime.datetime.utcnow() + datetime.timedelta(days=from_days_from_now)

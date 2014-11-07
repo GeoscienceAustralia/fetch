@@ -116,6 +116,7 @@ class ScheduledProcess(multiprocessing.Process):
 
         self.log_file = log_file
         self.lock_file = lock_file
+        self.id = _id
         self.name = 'fetch {} {}'.format(scheduled_time_st, name)
         self.module = module
         self.reporter = reporter
@@ -131,7 +132,7 @@ class ScheduledProcess(multiprocessing.Process):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
             sys.exit(0)
 
-        setproctitle(self.name)
+        setproctitle(self.id)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
             self.module.trigger(self.reporter)

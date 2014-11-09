@@ -3,12 +3,21 @@ Logic to load configuration.
 
 """
 import functools
+import os
+
+from croniter import croniter
+import yaml
+import yaml.resolver
 
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource
-import os
-import yaml
-import yaml.resolver
+
+
+class ConfigError(ValueError):
+    """
+    An invalid config file.
+    """
+    pass
 
 
 class ScheduledItem(object):
@@ -25,18 +34,33 @@ class ScheduledItem(object):
         self.cron_pattern = cron_pattern
         self.module = module
 
+        # Validate cron expression immediately.
+        try:
+            croniter(cron_pattern)
+        except ValueError as v:
+            raise ValueError('Cron parse error on {}: {}'.format(name, cron_pattern), v)
+
 
 def load_yaml(file_path):
     """
     Load configuration.
 
     :rtype: Config
+    :raises: ConfigError
     """
     if not os.path.exists(file_path):
-        raise ValueError('Config path does not exist: %r', file_path)
+        raise ConfigError('Config path does not exist: %r', file_path)
 
     file_io = open(file_path, 'r')
-    return _parse_config_dict(_load_config_dict(file_io))
+    try:
+        config_dict = _load_config_dict(file_io)
+    # TODO: What parse exceptions does yaml throw?
+    except Exception as e:
+        raise ConfigError(e)
+
+    config = _parse_config_dict(config_dict)
+
+    return config
 
 
 class Config(object):
@@ -74,7 +98,12 @@ def _parse_config_dict(config):
 
     rules = []
     for name, fields in config['rules'].iteritems():
-        rules.append(ScheduledItem(name, fields['schedule'], fields['source']))
+        try:
+            item = ScheduledItem(name, fields['schedule'], fields['source'])
+        except ValueError as v:
+            raise ConfigError(v)
+
+        rules.append(item)
 
     return Config(directory, rules, notify_email_addresses)
 

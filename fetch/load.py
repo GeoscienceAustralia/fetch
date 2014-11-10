@@ -38,7 +38,7 @@ class ScheduledItem(object):
         try:
             croniter(cron_pattern)
         except ValueError as v:
-            raise ValueError('Cron parse error on {}: {}'.format(name, cron_pattern), v)
+            raise ValueError('Cron parse error on {!r}: {!r}'.format(name, cron_pattern), v)
 
 
 def load_yaml(file_path):

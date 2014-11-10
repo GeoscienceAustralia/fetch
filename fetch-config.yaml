@@ -80,7 +80,7 @@ rules:
       end_day: 1
       overridden_properties:
         source_dir: /pub/eosdb/ancillary/{year}_{month}_{day}_{julday}
-        target_dir: /eoancillarydata/sensor-specific/MODIS/ancillary/{year}/{month}
+        target_dir: /eoancillarydata/sensor-specific/MODIS/ancillary/{year}/{julday}
       using: !ftp-directory
         hostname: ftp.ssec.wisc.edu
         # Get any file starting with 'gdas'
@@ -97,7 +97,7 @@ rules:
       end_day: 1
       overridden_properties:
         source_dir: /pub/eosdb/ancillary/{year}_{month}_{day}_{julday}/forecast
-        target_dir: /eoancillarydata/sensor-specific/MODIS/ancillary/{year}/{month}/forecast
+        target_dir: /eoancillarydata/sensor-specific/MODIS/ancillary/{year}/{julday}/forecast
       using: !ftp-directory
         hostname: ftp.ssec.wisc.edu
         # Get any file starting with 'gfs'

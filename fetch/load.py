@@ -5,6 +5,7 @@ Logic to load configuration.
 import functools
 import logging
 import os
+import subprocess
 
 from croniter import croniter
 import yaml
@@ -21,6 +22,13 @@ _log = logging.getLogger(__name__)
 class ConfigError(ValueError):
     """
     An invalid config file.
+    """
+    pass
+
+
+class FileProcessError(Exception):
+    """
+    An error in file processing.
     """
     pass
 
@@ -44,6 +52,9 @@ def _sanitize_for_filename(text):
 
 
 class FileProcessor(object):
+    """
+    Any action that will process a file after retrieval. (base class)
+    """
     def process(self, file_path):
         """
         Process the given file (possibly returning a new filename to replace it.)
@@ -51,22 +62,26 @@ class FileProcessor(object):
         :return: file path
         :rtype str
         """
-        return file_path
+        raise NotImplementedError('process() was not implemented')
 
 
 class ShellFileProcessor(FileProcessor):
+    """
+    A file processor that executes a (patterned) shell command.
 
+    :type command: str
+    """
     def __init__(self, command, expect_file):
-        """
-        A file processor that executes a (patterned) shell command.
-
-        :type command: str
-        """
         super(ShellFileProcessor, self).__init__()
         self.patterned_command = command
         self.expected_patterned_file = expect_file
 
-    def _build_command(self, pattern, file_path):
+    def _apply_file_pattern(self, pattern, file_path):
+        """
+        Format the given pattern.
+
+        :rtype: str
+        """
         path = Path(file_path)
         return pattern.format(
             # Full filename
@@ -82,12 +97,25 @@ class ShellFileProcessor(FileProcessor):
 
     def process(self, file_path):
         """
+        :type file_path: str
+        :rtype: str
+        :raises: FileProcessError
         """
-        command = self._build_command(self.patterned_command, file_path)
-        # Trigger command
-        # Check that output exists
-        expected_path = self._build_command(self.expected_patterned_file, file_path)
+        command = self._apply_file_pattern(self.patterned_command, file_path)
+        _log.info('Running %r', command)
 
+        # Trigger command
+        returned = subprocess.call(command, shell=True)
+        if returned != 0:
+            raise FileProcessError('Return code %r from command %r' % (returned, command))
+
+        # Check that output exists
+        expected_path = self._apply_file_pattern(self.expected_patterned_file, file_path)
+
+        if not os.path.exists(expected_path):
+            raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))
+
+        _log.debug('File available %r', expected_path)
         return expected_path
 
 
@@ -125,6 +153,10 @@ class ScheduledItem(object):
 
     @property
     def sanitized_name(self):
+        """
+        The name with whitespace and special chars stripped out.
+        :rtype: str
+        """
         return _sanitize_for_filename(self.name)
 
 

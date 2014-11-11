@@ -3,6 +3,7 @@ Logic to load configuration.
 
 """
 import functools
+import logging
 import os
 
 from croniter import croniter
@@ -12,6 +13,10 @@ import yaml.resolver
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource
 
+from pathlib import Path
+
+_log = logging.getLogger(__name__)
+
 
 class ConfigError(ValueError):
     """
@@ -20,25 +25,107 @@ class ConfigError(ValueError):
     pass
 
 
+def _sanitize_for_filename(text):
+    """
+    Sanitize the given text for use in a filename.
+
+    (particularly log and lock files under Unix. So we lowercase them.)
+
+    :type text: str
+    :rtype: str
+    >>> _sanitize_for_filename('some one')
+    'some-one'
+    >>> _sanitize_for_filename('s@me One')
+    's-me-one'
+    >>> _sanitize_for_filename('LS8 BPF')
+    'ls8-bpf'
+    """
+    return "".join([x if x.isalnum() else "-" for x in text.lower()])
+
+
+class FileProcessor(object):
+    def process(self, file_path):
+        """
+        Process the given file (possibly returning a new filename to replace it.)
+        :type file_path: str
+        :return: file path
+        :rtype str
+        """
+        return file_path
+
+
+class ShellFileProcessor(FileProcessor):
+
+    def __init__(self, command, expect_file):
+        """
+        A file processor that executes a (patterned) shell command.
+
+        :type command: str
+        """
+        super(ShellFileProcessor, self).__init__()
+        self.patterned_command = command
+        self.expected_patterned_file = expect_file
+
+    def _build_command(self, pattern, file_path):
+        path = Path(file_path)
+        return pattern.format(
+            # Full filename
+            filename=path.name,
+            # Suffix of filename
+            file_suffix=path.suffix,
+            # Name without suffix
+            file_stem=path.stem,
+            # Parent (directory)
+            parent_dir=str(path.parent),
+            parent_dirs=[str(p) for p in path.parents]
+        )
+
+    def process(self, file_path):
+        """
+        """
+        command = self._build_command(self.patterned_command, file_path)
+        # Trigger command
+        # Check that output exists
+        expected_path = self._build_command(self.expected_patterned_file, file_path)
+
+        return expected_path
+
+
 class ScheduledItem(object):
     """
     Scheduling information for a module.
     :type name: str
     :type cron_pattern: str
-    :type module: onreceipt.fetch.DataSource
+    :type module: fetch.DataSource
+    :type process:
     """
 
-    def __init__(self, name, cron_pattern, module):
+    def __init__(self, name, cron_pattern, module, process=None):
         super(ScheduledItem, self).__init__()
         self.name = name
-        self.cron_pattern = cron_pattern
+        if not name:
+            raise ValueError('No name provided for item (%r, %r)' % (cron_pattern, module))
+
         self.module = module
+        if not module:
+            raise ValueError('No source module for item %r' % (name,))
+
+        # Optional file processor.
+        self.process = process
+
+        self.cron_pattern = cron_pattern
+        if not cron_pattern:
+            raise ValueError('No cron schedule provided for item %r' % (name,))
 
         # Validate cron expression immediately.
         try:
             croniter(cron_pattern)
         except ValueError as v:
             raise ValueError('Cron parse error on {!r}: {!r}'.format(name, cron_pattern), v)
+
+    @property
+    def sanitized_name(self):
+        return _sanitize_for_filename(self.name)
 
 
 def load_yaml(file_path):
@@ -58,7 +145,10 @@ def load_yaml(file_path):
     except Exception as e:
         raise ConfigError(e)
 
-    config = _parse_config_dict(config_dict)
+    try:
+        config = _parse_config_dict(config_dict)
+    except ValueError as v:
+        raise ConfigError(v)
 
     return config
 
@@ -75,7 +165,12 @@ class Config(object):
         """
         super(Config, self).__init__()
         self.directory = directory
+        if not directory:
+            raise ValueError("No 'directory' specified in config")
+
+        # Empty list of rules is ok: they may be added after startup (a config reload/SIGHUP).
         self.rules = rules
+
         self.notify_addresses = notify_addresses
 
 
@@ -92,18 +187,22 @@ def _dump_config_dict(dic):
 def _parse_config_dict(config):
     """
     :rtype: list of ScheduledItem
+    :raises: ValueError
     """
-    directory = config['directory']
-    notify_email_addresses = config['notify']['email']
+
+    directory = config.get('directory')
+
+    notify_email_addresses = []
+    if 'notify' in config:
+        notify_config = config['notify']
+        if 'email' in notify_config:
+            notify_email_addresses = notify_config['email']
 
     rules = []
-    for name, fields in config['rules'].iteritems():
-        try:
-            item = ScheduledItem(name, fields['schedule'], fields['source'])
-        except ValueError as v:
-            raise ConfigError(v)
-
-        rules.append(item)
+    if 'rules' in config:
+        for name, fields in config['rules'].iteritems():
+            item = ScheduledItem(name, fields.get('schedule'), fields.get('source'), process=fields.get('process'))
+            rules.append(item)
 
     return Config(directory, rules, notify_email_addresses)
 

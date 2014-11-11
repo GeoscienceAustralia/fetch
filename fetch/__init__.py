@@ -48,7 +48,7 @@ class DataSource(SimpleObject):
 
         Abstract method.
 
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         """
         raise NotImplementedError("Trigger was not overridden")
 
@@ -63,7 +63,7 @@ class RemoteFetchException(Exception):
         self.detailed = detailed
 
 
-class FetchReporter(object):
+class ResultHandler(object):
     """
     A series of callbacks to report on the status of downloads.
     """
@@ -327,7 +327,7 @@ class RsyncMirrorSource(DataSource):
 
     def trigger(self, reporter):
         """
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         """
         transferred_files = files.rsync(
             self.source_path,
@@ -366,7 +366,7 @@ class DateRangeSource(DataSource):
     def trigger(self, reporter):
         """
         Run the DataSource prototype once for each date in the range.
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         """
         for day in _date_range(self.start_day, self.end_day):
             date_params = {

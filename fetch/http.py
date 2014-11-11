@@ -34,7 +34,7 @@ def _fetch_file(target_dir, target_name, reporter, url, override_existing=False,
 
     :type target_dir: str
     :type target_name: str
-    :type reporter: FetchReporter
+    :type reporter: ResultHandler
     :type url: str
     """
 
@@ -86,7 +86,7 @@ class HttpSource(DataSource):
     def trigger(self, reporter):
         """
         Download all URLs, overriding existing.
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         :return:
         """
         for url in self.urls:

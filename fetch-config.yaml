@@ -168,4 +168,7 @@ rules:
       # Match filenames such as "pr_wtr.eatm.2014.nc"
       name_pattern: pr_wtr.eatm.[0-9]{4}.nc
       target_dir: /eoancillarydata/water_vapour/source
+    process: !shell
+      command: '/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{file_stem}.nc {parent_dir}/{file_stem}.tif'
+      expect_file: '{parent_dir}/{file_stem}.tif'
 

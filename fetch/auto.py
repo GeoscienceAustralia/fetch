@@ -22,7 +22,7 @@ from setproctitle import setproctitle
 import arrow
 from croniter import croniter
 
-from . import FetchReporter, TaskFailureEmailer, RemoteFetchException
+from . import ResultHandler, TaskFailureEmailer, RemoteFetchException
 from .load import load_yaml
 
 
@@ -67,19 +67,18 @@ def _redirect_output(log_file):
     logging.getLogger().addHandler(handler)
 
 
-def _run_module(reporter, name, module, scheduled_time, log_directory, lock_directory):
+def _run_item(reporter, item, scheduled_time, log_directory, lock_directory):
     """
     Run the given module in a subprocess
-    :type reporter: FetchReporter
-    :type name: str
-    :type module: DataSource
+    :type reporter: ResultHandler
+    :type item: ScheduledItem
     :rtype: ScheduledProcess
     """
     p = ScheduledProcess(
-        reporter, name, module, scheduled_time, log_directory, lock_directory
+        reporter, item, scheduled_time, log_directory, lock_directory
     )
 
-    _log.debug('Module info %r', module)
+    _log.debug('Module info %r', item.module)
     _log.info('Starting %r. Log %r, Lock %r', p.name, p.log_file, p.lock_file)
     p.start()
     return p
@@ -90,17 +89,16 @@ class ScheduledProcess(multiprocessing.Process):
     A subprocess to run a module.
     """
 
-    def __init__(self, reporter, name, module, scheduled_time, log_directory, lock_directory):
+    def __init__(self, reporter, item, scheduled_time, log_directory, lock_directory):
         """
-        :type reporter: onreceipt.fetch.FetchReporter
-        :type name: str
-        :type module: onreceipt.fetch.DataSource
+        :type reporter: fetch.ResultHandler
+        :type item: fetch.load.ScheduledItem
         :type scheduled_time: float
         :type log_directory: str
         :type lock_directory: str
         """
         super(ScheduledProcess, self).__init__()
-        id_ = _sanitize_for_filename(name)
+        id_ = item.sanitized_name
         lock_file = os.path.join(
             lock_directory,
             '{id}.lck'.format(id=id_)
@@ -117,8 +115,8 @@ class ScheduledProcess(multiprocessing.Process):
         self.log_file = log_file
         self.lock_file = lock_file
         self.id_ = id_
-        self.name = 'fetch {} {}'.format(scheduled_time_st, name)
-        self.module = module
+        self.name = 'fetch {} {}'.format(scheduled_time_st, item.name)
+        self.module = item.module
         self.reporter = reporter
 
     def run(self):
@@ -135,6 +133,8 @@ class ScheduledProcess(multiprocessing.Process):
         setproctitle(self.id_)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
+            # Create processing pool
+            # Use for post processing (and/or multiple concurrent downloads?)
             self.module.trigger(self.reporter)
         except RemoteFetchException as e:
             print('-' * 10)
@@ -164,7 +164,7 @@ def _on_child_finish(child, notifiers):
     Handle child process cleanup: Check for errors.
 
     :type child: ScheduledProcess
-    :type notifiers: list of onreceipt.fetch.TaskFailureListener
+    :type notifiers: list of fetch.TaskFailureListener
     """
     exit_code = child.exitcode
     if exit_code is None:
@@ -201,24 +201,6 @@ def _filter_finished_children(running_children, notifiers):
         _on_child_finish(child, notifiers)
 
     return still_running
-
-
-def _sanitize_for_filename(text):
-    """
-    Sanitize the given text for use in a filename.
-
-    (particularly log and lock files under Unix. So we lowercase them.)
-
-    :type text: str
-    :rtype: str
-    >>> _sanitize_for_filename('some one')
-    'some-one'
-    >>> _sanitize_for_filename('s@me One')
-    's-me-one'
-    >>> _sanitize_for_filename('LS8 BPF')
-    'ls8-bpf'
-    """
-    return "".join([x if x.isalnum() else "-" for x in text.lower()])
 
 
 def get_day_log_dir(log_directory, time_secs):
@@ -315,7 +297,7 @@ class RunConfig(object):
         self.log_directory = None
         #: type: str
         self.lock_directory = None
-        #: :type: list of onreceipt.fetch.TaskFailureListener
+        #: :type: list of fetch.TaskFailureListener
         self.notifiers = []
 
     def load(self):
@@ -345,7 +327,7 @@ class RunConfig(object):
             os.makedirs(self.log_directory)
 
 
-class FileCompletionReporter(FetchReporter):
+class NotifyResultHandler(ResultHandler):
     """
     For now, we print events to the log.
     """
@@ -354,7 +336,7 @@ class FileCompletionReporter(FetchReporter):
         """
         :type config: RunConfig
         """
-        super(FileCompletionReporter, self).__init__()
+        super(NotifyResultHandler, self).__init__()
         self.config = config
 
     def file_complete(self, source_uri, path):
@@ -378,6 +360,10 @@ class FileCompletionReporter(FetchReporter):
             notifier.on_file_failure(None, uri, summary, body)
 
 
+# class FilePostProcessResultHandler(NotifyResultHandler):
+#     pass
+
+
 def run_loop(config_path):
     """
     Main loop
@@ -398,7 +384,7 @@ def run_loop(config_path):
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
     # TODO: Report arriving ancillary files on the message bus.
-    reporter = FileCompletionReporter(o)
+    reporter = NotifyResultHandler(o)
 
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor
@@ -426,10 +412,9 @@ def run_loop(config_path):
 
             scheduled_time, scheduled_item = o.schedule.pop_next()
 
-            p = _run_module(
+            p = _run_item(
                 reporter,
-                scheduled_item.name,
-                scheduled_item.module,
+                scheduled_item,
                 scheduled_time=scheduled_time,
                 # Use a unique log directory for each day
                 log_directory=get_day_log_dir(o.log_directory, scheduled_time),
@@ -468,8 +453,8 @@ if __name__ == '__main__':
     logging.getLogger().addHandler(_LOG_HANDLER)
     logging.getLogger().setLevel(logging.WARNING)
 
-    logging.getLogger('onreceipt').setLevel(logging.INFO)
-    logging.getLogger('onreceipt.fetch').setLevel(logging.INFO)
+    logging.getLogger('neocommon').setLevel(logging.INFO)
+    logging.getLogger('fetch').setLevel(logging.INFO)
     _log.setLevel(logging.DEBUG)
 
     if len(sys.argv) != 2:

@@ -28,7 +28,7 @@ def _fetch_files(hostname,
     :type get_filepaths_fn: (ftplib.FTP) -> list of str
     :type hostname: str
     :type target_dir: str
-    :type reporter: FetchReporter
+    :type reporter: ResultHandler
     """
 
     ftp = ftplib.FTP(hostname)
@@ -83,7 +83,7 @@ class FtpSource(DataSource):
     def trigger(self, reporter):
         """
         Download all files, overriding existing.
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         :return:
         """
 
@@ -123,7 +123,7 @@ class FtpListingSource(DataSource):
         """
         Download all matching files.
 
-        :type reporter: FetchReporter
+        :type reporter: ResultHandler
         :return:
         """
 

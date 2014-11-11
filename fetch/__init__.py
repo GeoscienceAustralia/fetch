@@ -5,6 +5,8 @@ import datetime
 import multiprocessing
 import smtplib
 import socket
+import subprocess
+from pathlib import Path
 from neocommon import files, Uri
 import os
 import re
@@ -27,6 +29,13 @@ class SimpleObject(object):
             return self.__dict__ == other.__dict__
         else:
             return False
+
+
+class FileProcessError(Exception):
+    """
+    An error in file processing.
+    """
+    pass
 
 
 class DataSource(SimpleObject):
@@ -471,3 +480,81 @@ class TaskFailureEmailer(TaskFailureListener):
             msg.as_string()
         )
         s.quit()
+
+
+class FileProcessor(SimpleObject):
+    """
+    Any action that will process a file after retrieval. (base class)
+    """
+    def process(self, file_path):
+        """
+        Process the given file (possibly returning a new filename to replace it.)
+        :type file_path: str
+        :return: file path
+        :rtype str
+        """
+        raise NotImplementedError('process() was not implemented')
+
+
+class ShellFileProcessor(FileProcessor):
+    """
+    A file processor that executes a (patterned) shell command.
+
+    :type command: str
+    """
+    def __init__(self, command=None, expect_file=None):
+        super(ShellFileProcessor, self).__init__()
+        self.patterned_command = command
+        self.expected_patterned_file = expect_file
+
+    def _apply_file_pattern(self, pattern, file_path):
+        """
+        Format the given pattern.
+
+        :rtype: str
+
+        >>> p = ShellFileProcessor()
+        >>> p._apply_file_pattern('{file_stem} extension {file_suffix}', '/tmp/something.txt')
+        'something extension .txt'
+        >>> p._apply_file_pattern('{filename} in {parent_dir}', '/tmp/something.txt')
+        'something.txt in /tmp'
+        >>> p._apply_file_pattern('{parent_dirs[0]}', '/tmp/something.txt')
+        '/tmp'
+        >>> p._apply_file_pattern('{parent_dirs[1]}', '/tmp/something.txt')
+        '/'
+        """
+        path = Path(file_path)
+        return pattern.format(
+            # Full filename
+            filename=path.name,
+            # Suffix of filename (with dot: '.txt')
+            file_suffix=path.suffix,
+            # Name without suffix
+            file_stem=path.stem,
+            # Parent (directory)
+            parent_dir=str(path.parent),
+            parent_dirs=[str(p) for p in path.parents]
+        )
+
+    def process(self, file_path):
+        """
+        :type file_path: str
+        :rtype: str
+        :raises: FileProcessError
+        """
+        command = self._apply_file_pattern(self.patterned_command, file_path)
+        _log.info('Running %r', command)
+
+        # Trigger command
+        returned = subprocess.call(command, shell=True)
+        if returned != 0:
+            raise FileProcessError('Return code %r from command %r' % (returned, command))
+
+        # Check that output exists
+        expected_path = self._apply_file_pattern(self.expected_patterned_file, file_path)
+
+        if not os.path.exists(expected_path):
+            raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))
+
+        _log.debug('File available %r', expected_path)
+        return expected_path

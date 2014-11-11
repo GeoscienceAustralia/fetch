@@ -5,7 +5,6 @@ Logic to load configuration.
 import functools
 import logging
 import os
-import subprocess
 
 from croniter import croniter
 import yaml
@@ -14,7 +13,6 @@ import yaml.resolver
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource
 
-from pathlib import Path
 
 _log = logging.getLogger(__name__)
 
@@ -25,12 +23,6 @@ class ConfigError(ValueError):
     """
     pass
 
-
-class FileProcessError(Exception):
-    """
-    An error in file processing.
-    """
-    pass
 
 
 def _sanitize_for_filename(text):
@@ -49,74 +41,6 @@ def _sanitize_for_filename(text):
     'ls8-bpf'
     """
     return "".join([x if x.isalnum() else "-" for x in text.lower()])
-
-
-class FileProcessor(object):
-    """
-    Any action that will process a file after retrieval. (base class)
-    """
-    def process(self, file_path):
-        """
-        Process the given file (possibly returning a new filename to replace it.)
-        :type file_path: str
-        :return: file path
-        :rtype str
-        """
-        raise NotImplementedError('process() was not implemented')
-
-
-class ShellFileProcessor(FileProcessor):
-    """
-    A file processor that executes a (patterned) shell command.
-
-    :type command: str
-    """
-    def __init__(self, command, expect_file):
-        super(ShellFileProcessor, self).__init__()
-        self.patterned_command = command
-        self.expected_patterned_file = expect_file
-
-    def _apply_file_pattern(self, pattern, file_path):
-        """
-        Format the given pattern.
-
-        :rtype: str
-        """
-        path = Path(file_path)
-        return pattern.format(
-            # Full filename
-            filename=path.name,
-            # Suffix of filename
-            file_suffix=path.suffix,
-            # Name without suffix
-            file_stem=path.stem,
-            # Parent (directory)
-            parent_dir=str(path.parent),
-            parent_dirs=[str(p) for p in path.parents]
-        )
-
-    def process(self, file_path):
-        """
-        :type file_path: str
-        :rtype: str
-        :raises: FileProcessError
-        """
-        command = self._apply_file_pattern(self.patterned_command, file_path)
-        _log.info('Running %r', command)
-
-        # Trigger command
-        returned = subprocess.call(command, shell=True)
-        if returned != 0:
-            raise FileProcessError('Return code %r from command %r' % (returned, command))
-
-        # Check that output exists
-        expected_path = self._apply_file_pattern(self.expected_patterned_file, file_path)
-
-        if not os.path.exists(expected_path):
-            raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))
-
-        _log.debug('File available %r', expected_path)
-        return expected_path
 
 
 class ScheduledItem(object):

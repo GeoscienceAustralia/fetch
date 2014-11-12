@@ -49,7 +49,7 @@ class ScheduledItem(object):
     :type name: str
     :type cron_pattern: str
     :type module: fetch.DataSource
-    :type process:
+    :type process: fetch.FileProcessor
     """
 
     def __init__(self, name, cron_pattern, module, process=None):

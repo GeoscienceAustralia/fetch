@@ -118,6 +118,7 @@ class ScheduledProcess(multiprocessing.Process):
         self.name = 'fetch {} {}'.format(scheduled_time_st, item.name)
         self.module = item.module
         self.reporter = reporter
+        self.item = item
 
     def run(self):
         """
@@ -133,9 +134,33 @@ class ScheduledProcess(multiprocessing.Process):
         setproctitle(self.id_)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
-            # Create processing pool
+
+            class WrapHandler(ResultHandler):
+                """
+                Wrap the given handler in one that processes output files.
+                :type item: ScheduledItem
+                :type reporter: fetch.ResultHandler
+                """
+                def __init__(self, item, reporter):
+                    super(WrapHandler, self).__init__()
+                    self.item = item
+                    self.reporter = reporter
+
+                def file_complete(self, source_uri, path):
+                    """
+                    Call on completion of a file
+                    :type source_uri: str
+                    :type path: str
+                    """
+                    if self.item.process:
+                        path = self.item.process.process(path)
+
+                    self.reporter.file_complete(source_uri, path)
+
+            # TODO: Create processing pool?
             # Use for post processing (and/or multiple concurrent downloads?)
-            self.module.trigger(self.reporter)
+            self.module.trigger(WrapHandler(self.item, self.reporter))
+
         except RemoteFetchException as e:
             print('-' * 10)
             print(e.message)

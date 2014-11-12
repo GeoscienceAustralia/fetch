@@ -1,53 +1,95 @@
-import unittest
-from fetch import http, RegexpOutputPathTransform, ftp, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource, load
 
-__author__ = 'u63606'
+from __future__ import print_function
+
+import tempfile
+import unittest
+from pathlib import Path
+from fetch import load
+from neocommon import files
 
 
 class TestLoad(unittest.TestCase):
-    def test_dump_load(self):
+    def _fail_with_diff(self, reparsed_config, source_config):
+        print('-' * 20)
+        print_simple_obj_diff(source_config, reparsed_config)
+        print('-' * 20)
+        self.assertTrue(False, msg='Reparsed config not equal: see print output above.')
+
+    def test_dump_load_dict(self):
         source_config = _make_config()
 
         raw_yaml = load._dump_config_dict(source_config)
+
         reparsed_config = load._load_config_dict(raw_yaml)
 
         if source_config != reparsed_config:
-            print '-' * 20
-            print_simple_obj_diff(source_config, reparsed_config)
-            print '-' * 20
-            self.assertTrue(False, msg='Reparsed config not equal: see print output above.')
+            self._fail_with_diff(reparsed_config, source_config)
+
+    def test_dump_load_obj(self):
+        original_config = load.Config.from_dict(_make_config())
+        config_file_path = Path(files.temp_dir(tempfile.tempdir, prefix='testrun'), 'config.yaml')
+
+        with config_file_path.open(mode='w') as f:
+            yaml = load.dump_yaml(original_config)
+            f.write(unicode(yaml))
+
+        reparsed_config = load.load_yaml(str(config_file_path))
+
+        if _make_config() != reparsed_config.to_dict():
+            self._fail_with_diff(_make_config(), reparsed_config.to_dict())
 
 
 def print_simple_obj_diff(dict1, dict2):
+    if type(dict2) in (int, float, str, unicode):
+        print('-   {!r}'.format(dict1))
+        print('+   {!r}'.format(dict2))
+        return
+
+    if type(dict1) == list:
+        print_simple_list_diff(dict1, dict2)
+        return
+
     if type(dict1) != dict:
         dict1 = dict1.__dict__
     if type(dict2) != dict:
         dict2 = dict2.__dict__
 
     for n in dict1:
-        if n not in dict2:
-            print('-   "' + str(n) + '":')
+        if n not in dict2 and (dict1[n] is not None):
+            print('-   {!r}'.format(n))
     for n in dict2:
         if n not in dict1:
-            print('+   "' + str(n) + '":')
+            print('+   {!r}'.format(n))
             continue
         if dict2[n] != dict1[n]:
-            print 'Not equal %r' % n
-            if type(dict2[n]) in (int, float, str, unicode, list):
-                print('-   "' + str(n) + '" : "' + str(dict1[n]))
-                print('+   "' + str(n) + '" : "' + str(dict2[n]))
-            else:
-                first = dict1[n]
-                second = dict2[n]
-                print_simple_obj_diff(first, second)
+            print('Not equal %r, \n%r\nand\n%r\n' % (n, dict1[n], dict2[n]))
+            print_simple_obj_diff(dict1[n], dict2[n])
+
     return
+
+
+def print_simple_list_diff(list1, list2):
+    print('list\n')
+    for i in range(len(list1)):
+        if len(list2) <= i:
+            print('-   {}: {!r}'.format(i, list1[i]))
+
+        if list1[i] != list2[i]:
+            print_simple_obj_diff(list1[i], list2[i])
+
+    if len(list2) > len(list1):
+        for i in range(len(list1), len(list2)):
+            print('+   {}: {!r}'.format(i, list2[i]))
+    print()
 
 
 def _make_config():
     """
     Load a config dict (this is our old schedule)
     """
+    from fetch import http, ftp, RegexpOutputPathTransform, \
+        DateRangeSource, DateFilenameTransform, \
+        RsyncMirrorSource, ShellFileProcessor
     # Dump / Load / Dump to test our routines.
     anc_data = '/tmp/anc'
     schedule = {
@@ -118,6 +160,11 @@ def _make_config():
                     source_dir='/Datasets/ncep.reanalysis/surface',
                     name_pattern='pr_wtr.eatm.[0-9]{4}.nc',
                     target_dir=anc_data + '/water_vapour/source'
+                ),
+                'process': ShellFileProcessor(
+                    command='/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" '
+                            '{parent_dir}/{file_stem}.nc {parent_dir}/{file_stem}.tif',
+                    expect_file='{parent_dir}/{file_stem}.tif'
                 )
             },
             'NPP GDAS-forecast': {

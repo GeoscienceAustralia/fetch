@@ -137,7 +137,11 @@ class ScheduledProcess(multiprocessing.Process):
 
             class WrapHandler(ResultHandler):
                 """
-                Wrap the given handler in one that processes output files.
+                Wrap the given handler so that output files are processed.
+
+                This is inelegant, and we might want to replace it all with
+                promises or something.
+
                 :type item: ScheduledItem
                 :type reporter: fetch.ResultHandler
                 """

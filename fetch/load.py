@@ -11,7 +11,7 @@ import yaml
 import yaml.resolver
 
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource
+    RsyncMirrorSource, SimpleObject
 
 
 _log = logging.getLogger(__name__)
@@ -22,7 +22,6 @@ class ConfigError(ValueError):
     An invalid config file.
     """
     pass
-
 
 
 def _sanitize_for_filename(text):
@@ -43,7 +42,7 @@ def _sanitize_for_filename(text):
     return "".join([x if x.isalnum() else "-" for x in text.lower()])
 
 
-class ScheduledItem(object):
+class ScheduledItem(SimpleObject):
     """
     Scheduling information for a module.
     :type name: str
@@ -102,11 +101,19 @@ def load_yaml(file_path):
         raise ConfigError(e)
 
     try:
-        config = _parse_config_dict(config_dict)
+        config = Config.from_dict(config_dict)
     except ValueError as v:
         raise ConfigError(v)
 
     return config
+
+
+def dump_yaml(config):
+    """
+    :type config: Config
+    :rtype: str
+    """
+    return _dump_config_dict(config.to_dict())
 
 
 class Config(object):
@@ -117,7 +124,7 @@ class Config(object):
     def __init__(self, directory, rules, notify_addresses):
         """
         :type directory: str
-        :type rules: list of ScheduledItem
+        :type rules: set of ScheduledItem
         """
         super(Config, self).__init__()
         self.directory = directory
@@ -129,6 +136,72 @@ class Config(object):
 
         self.notify_addresses = notify_addresses
 
+    @classmethod
+    def from_dict(cls, config):
+        """
+        Create Config object from dict (typically the dict output by YAML parsing)
+        :type config: dict
+        :rtype: Config
+        :raises: ValueError
+        """
+
+        directory = config.get('directory')
+
+        notify_email_addresses = []
+        if 'notify' in config:
+            notify_config = config['notify']
+            if 'email' in notify_config:
+                notify_email_addresses = notify_config['email']
+
+        rules = set()
+        if 'rules' in config:
+            for name, fields in config['rules'].iteritems():
+                item = ScheduledItem(name, fields.get('schedule'), fields.get('source'),
+                                     process=fields.get('process'))
+                rules.add(item)
+
+        return Config(directory, rules, notify_email_addresses)
+
+    def to_dict(self):
+        """
+        Convert to simple dict format (expected by our YAML output)
+        :return:
+        """
+        return {
+            'directory': self.directory,
+            'notify': {
+                'email': self.notify_addresses
+            },
+            'rules': dict([
+                (
+                    r.name, _remove_nones({
+                        'schedule': r.cron_pattern,
+                        'source': r.module,
+                        'process': r.process
+                    })
+                )
+                for r in self.rules
+            ])
+        }
+
+
+def _remove_nones(dict_):
+    """
+    Remove fields from the dict whose values are None.
+
+    Returns a new dict.
+    :type dict_: dict
+    :rtype dict
+
+    >>> _remove_nones({'a': 4, 'b': None})
+    {'a': 4}
+    >>> _remove_nones({'a': 'a', 'b': 0})
+    {'a': 'a', 'b': 0}
+    >>> _remove_nones({})
+    {}
+    """
+    return dict([(k, v) for k, v in dict_.iteritems() if v is not None])
+
 
 def _load_config_dict(file_io):
     """Load YAML file into config dict"""
@@ -138,29 +211,6 @@ def _load_config_dict(file_io):
 def _dump_config_dict(dic):
     """Dump a config dict into a YAML string"""
     return yaml.dump(dic, default_flow_style=False)
-
-
-def _parse_config_dict(config):
-    """
-    :rtype: list of ScheduledItem
-    :raises: ValueError
-    """
-
-    directory = config.get('directory')
-
-    notify_email_addresses = []
-    if 'notify' in config:
-        notify_config = config['notify']
-        if 'email' in notify_config:
-            notify_email_addresses = notify_config['email']
-
-    rules = []
-    if 'rules' in config:
-        for name, fields in config['rules'].iteritems():
-            item = ScheduledItem(name, fields.get('schedule'), fields.get('source'), process=fields.get('process'))
-            rules.append(item)
-
-    return Config(directory, rules, notify_email_addresses)
 
 
 def _init_yaml_handling():
@@ -235,6 +285,7 @@ def _init_yaml_handling():
 
     add_default_constructor(DateRangeSource, '!date-range')
     add_default_constructor(RsyncMirrorSource, '!rsync')
+    # add_default_constructor(ShellFileProcessor, '!shell')
     add_default_constructor(http.HttpListingSource, '!http-directory')
     add_default_constructor(http.HttpSource, '!http-files')
     add_default_constructor(http.RssSource, '!rss')

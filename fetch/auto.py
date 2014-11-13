@@ -146,7 +146,6 @@ class ScheduledProcess(multiprocessing.Process):
                 :type reporter: fetch.ResultHandler
                 """
                 def __init__(self, item, reporter):
-                    super(WrapHandler, self).__init__()
                     self.item = item
                     self.reporter = reporter
 

@@ -42,6 +42,8 @@ def _fetch_files(hostname,
 
             def ftp_fetch(t):
                 """Fetch data to filename t"""
+                # https://bitbucket.org/logilab/pylint/issue/271/spurious-warning-w0640-issued-for-loop
+                # pylint: disable=cell-var-from-loop
                 _log.debug('Retrieving %r to %r', filename, t)
                 with open(t, 'wb') as f:
                     ftp.retrbinary('RETR ' + filename, f.write)

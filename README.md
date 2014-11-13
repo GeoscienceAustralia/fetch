@@ -166,7 +166,7 @@ year and month in the `target_dir`.
 
 ### Date patterns: !date-pattern
 
-A `date-pattern` is a pseudo download source that repeats a source multiple times over a date range.
+A `date-pattern` is a pseudo-source that repeats a source multiple times over a date range.
 
 It takes a `start_day` number and an `end_day` number. These are relative to the current
 day: Ie. A start day of -3 means three days ago.
@@ -193,4 +193,42 @@ Example:
 This expands to four `!http-directory` downloaders. Three days ago, two days ago, one day ago and today.
 
 The properties in `overridden_properties:` are formatted with the given date and set on each `!http-directory` downloader.
+
+### Post-download file processing
+
+Post-download processing can be done with the 'process' field.
+
+Currently only shell commands are supported, using the '!shell' tag.
+
+For example, use gdal to convert each downloaded file from NetCDF (*.nc) to Tiff (*.tiff):
+
+    Water vapour:
+      schedule: '30 12 * * *'
+      source: !ftp-directory
+        hostname: ftp.cdc.noaa.gov
+        source_dir: /Datasets/ncep.reanalysis/surface
+        # Match filenames such as "pr_wtr.eatm.2014.nc"
+        name_pattern: pr_wtr.eatm.[0-9]{4}.nc
+        target_dir: /data/fetch/eoancil-test/water_vapour/source
+      # Convert files to tiff (from netCDF)
+     process: !shell
+        command: 'gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{filename} {parent_dir}/{file_stem}.tif'
+        expect_file: '{parent_dir}/{file_stem}.tif'
+
+Where:
+
+- *'command'* is the shell command to run
+- *'expect_file'* is the full path to an output file. (To allow fetch daemon to track newly added files)
+
+Both fields are evaluated with [python string formatting](https://docs.python.org/2/library/string.html#formatstrings),
+ supporting the following fields:
+
+    # Full name of file (eg. 'pr_wtr.eatm.2014.nc')
+    {filename}
+    # Suffix of filename (eg. '.nc')
+    {file_suffix}
+    # Filename without suffix (eg. 'pr_wtr.eatm.2014')
+    {file_stem}
+    # Directory ('/data/fetch/eoancil-test/water_vapour/source')
+    {parent_dir}
 

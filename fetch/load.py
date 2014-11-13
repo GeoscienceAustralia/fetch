@@ -232,10 +232,10 @@ def verify_can_construct(target_class, fields, identifier=None):
     ...
     ValueError: Required field 'using' not found for 'DateRangeSource'
     >>> # Invalid argument
-    >>> verify_can_construct(DateRangeSource, {'not_an_arg': 2}, identifier='!date-range')
+    >>> verify_can_construct(DateFilenameTransform, {'not_an_arg': 2}, identifier='!date-range')
     Traceback (most recent call last):
     ...
-    ValueError: Unknown field 'not_an_arg' for '!date-range'. (Supports 'using', 'overridden_properties', 'start_day', 'end_day')
+    ValueError: Unknown field 'not_an_arg' for '!date-range'. (Supports 'format_', 'fixed_date')
     """
     if not identifier:
         identifier = target_class.__name__

@@ -388,10 +388,6 @@ class NotifyResultHandler(ResultHandler):
             notifier.on_file_failure(None, uri, summary, body)
 
 
-# class FilePostProcessResultHandler(NotifyResultHandler):
-#     pass
-
-
 def run_loop(config_path):
     """
     Main loop

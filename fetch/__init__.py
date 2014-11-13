@@ -504,8 +504,8 @@ class ShellFileProcessor(FileProcessor):
     """
     def __init__(self, command=None, expect_file=None):
         super(ShellFileProcessor, self).__init__()
-        self.patterned_command = command
-        self.expected_patterned_file = expect_file
+        self.command = command
+        self.expect_file = expect_file
 
     def _apply_file_pattern(self, pattern, file_path):
         """
@@ -542,7 +542,7 @@ class ShellFileProcessor(FileProcessor):
         :rtype: str
         :raises: FileProcessError
         """
-        command = self._apply_file_pattern(self.patterned_command, file_path)
+        command = self._apply_file_pattern(self.command, file_path)
         _log.info('Running %r', command)
 
         # Trigger command
@@ -551,7 +551,7 @@ class ShellFileProcessor(FileProcessor):
             raise FileProcessError('Return code %r from command %r' % (returned, command))
 
         # Check that output exists
-        expected_path = self._apply_file_pattern(self.expected_patterned_file, file_path)
+        expected_path = self._apply_file_pattern(self.expect_file, file_path)
 
         if not os.path.exists(expected_path):
             raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))

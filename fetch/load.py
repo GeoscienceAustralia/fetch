@@ -5,7 +5,7 @@ Logic to load configuration.
 import functools
 import logging
 import os
-
+import inspect
 from croniter import croniter
 import yaml
 import yaml.resolver
@@ -213,6 +213,56 @@ def _dump_config_dict(dic):
     return yaml.dump(dic, default_flow_style=False)
 
 
+def verify_can_construct(target_class, fields, identifier=None):
+    """
+    Verify that a class can be constructed with given arguments.
+    :type target_class: class
+    :type fields: dict
+    :type identifier: str
+
+    >>> # All Args
+    >>> verify_can_construct(DateRangeSource, {'using': 1, 'overridden_properties': 2, 'start_day': 3, 'end_day': 4})
+    >>> # Just required args
+    >>> verify_can_construct(DateRangeSource, {'using': 1, 'overridden_properties': 2})
+    >>> # With one optional arg
+    >>> verify_can_construct(DateRangeSource, {'using': 1, 'overridden_properties': 2, 'start_day': 3})
+    >>> # A required arg missing
+    >>> verify_can_construct(DateRangeSource, {'overridden_properties': 2})
+    Traceback (most recent call last):
+    ...
+    ValueError: Required field 'using' not found for 'DateRangeSource'
+    >>> # Invalid argument
+    >>> verify_can_construct(DateRangeSource, {'not_an_arg': 2}, identifier='!date-range')
+    Traceback (most recent call last):
+    ...
+    ValueError: Unknown field 'not_an_arg' for '!date-range'. (Supports 'using', 'overridden_properties', 'start_day', 'end_day')
+    """
+    if not identifier:
+        identifier = target_class.__name__
+    arg_spec = inspect.getargspec(target_class.__init__)
+
+    # Does the class take no arguments (just 'self')?
+    if len(arg_spec.args) == 1 and len(fields) == 0:
+        # Have no arguments and it takes no arguments, so we're done.
+        return
+
+    # Get argument names other than 'self' (the first)
+    arg_names = arg_spec.args[1:]
+    optional_arg_count = len(arg_spec.defaults) if arg_spec.defaults else 0
+    # Required args are those that precede the optional args.
+    required_arg_names = arg_names[:-optional_arg_count]
+
+    # Are there any invalid fields?
+    for name in fields:
+        if name not in arg_names:
+            raise ValueError("Unknown field %r for '%s'. (Supports '%s')" % (name, identifier, "', '".join(arg_names)))
+
+    # Are there any missing required fields?
+    for name in required_arg_names:
+        if name not in fields.keys():
+            raise ValueError("Required field %r not found for '%s'" % (name, identifier))
+
+
 def _init_yaml_handling():
     """
     Allow load/dump of our custom classes in YAML.
@@ -226,7 +276,14 @@ def _init_yaml_handling():
         :param node:
         :return:
         """
+        #: :type: dict
         fields = loader.construct_mapping(node)
+
+        if not hasattr(cls, '__init__'):
+            raise RuntimeError('Class has no init method: %r' % cls)
+
+        verify_can_construct(cls, fields, node.tag)
+
         return cls(**fields)
 
     def _yaml_item_constructor(cls, loader, node):
@@ -263,14 +320,14 @@ def _init_yaml_handling():
         """
         return dumper.represent_scalar(tag, getattr(data, attr_name))
 
-    def add_default_constructor(source, type_annotation, flow_style=None):
+    def add_default_constructor(object_class, type_annotation, flow_style=None):
         """
         A default object-to-map association for YAML.
 
         The class being mapped must have exactly matching fields and constructor arguments.
         """
-        yaml.add_constructor(type_annotation, functools.partial(_yaml_default_constructor, source))
-        yaml.add_representer(source, functools.partial(_yaml_default_representer, type_annotation, flow_style))
+        yaml.add_constructor(type_annotation, functools.partial(_yaml_default_constructor, object_class))
+        yaml.add_representer(object_class, functools.partial(_yaml_default_representer, type_annotation, flow_style))
 
     def add_item_constructor(source, type_annotation, attribute):
         """

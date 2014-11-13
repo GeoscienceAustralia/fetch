@@ -11,7 +11,7 @@ import yaml
 import yaml.resolver
 
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource, SimpleObject
+    RsyncMirrorSource, SimpleObject, ShellFileProcessor
 
 
 _log = logging.getLogger(__name__)
@@ -285,7 +285,7 @@ def _init_yaml_handling():
 
     add_default_constructor(DateRangeSource, '!date-range')
     add_default_constructor(RsyncMirrorSource, '!rsync')
-    # add_default_constructor(ShellFileProcessor, '!shell')
+    add_default_constructor(ShellFileProcessor, '!shell')
     add_default_constructor(http.HttpListingSource, '!http-directory')
     add_default_constructor(http.HttpSource, '!http-files')
     add_default_constructor(http.RssSource, '!rss')

@@ -157,11 +157,11 @@ year and month in the `target_dir`.
     schedule: '*/15 * * * *'
     source: !rss
       url: http://landsat.usgs.gov/bpf.rss
-      target_dir: /eoancillarydata/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}
-      # Extract year and month from filenames to use in target directory
+      # Extract year and month from filenames using regexp groups
       #    Example filename: 'LT8BPF20141028232827_20141029015842.01'
       filename_transform: !regexp-extract 'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
-
+      # Use these group names ('year' and 'month') in the output location:
+      target_dir: /eoancillarydata/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}
 
 
 ### Date patterns: !date-pattern
@@ -169,7 +169,7 @@ year and month in the `target_dir`.
 A `date-pattern` is a pseudo-source that repeats a source multiple times over a date range.
 
 It takes a `start_day` number and an `end_day` number. These are relative to the current
-day: Ie. A start day of -3 means three days ago.
+day: ie. A start day of -3 means three (UTC) days ago .
 
 It then overrides properties on the embedded source using each date.
 
@@ -196,11 +196,11 @@ The properties in `overridden_properties:` are formatted with the given date and
 
 ### Post-download file processing
 
-Post-download processing can be done with the 'process' field.
+Post-download processing can be done with the `process:` field.
 
-Currently only shell commands are supported, using the '!shell' tag.
+Currently only shell commands are supported, using the `!shell` processor.
 
-For example, use gdal to convert each downloaded file from NetCDF (*.nc) to Tiff (*.tiff):
+For example, use gdal to convert each downloaded file from NetCDF (`*.nc`) to Tiff (`*.tiff`):
 
     Water vapour:
       schedule: '30 12 * * *'
@@ -217,8 +217,8 @@ For example, use gdal to convert each downloaded file from NetCDF (*.nc) to Tiff
 
 Where:
 
-- *'command'* is the shell command to run
-- *'expect_file'* is the full path to an output file. (To allow fetch daemon to track newly added files)
+- `command:` is the shell command to run
+- `expect_file:` is the full path to an output file. (To allow fetch daemon to track newly added files)
 
 Both fields are evaluated with [python string formatting](https://docs.python.org/2/library/string.html#formatstrings),
  supporting the following fields:

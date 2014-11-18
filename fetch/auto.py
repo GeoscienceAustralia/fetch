@@ -236,10 +236,14 @@ def get_day_log_dir(log_directory, time_secs):
     Get log directory for this day.
     :type log_directory: str
     :type time_secs: float
-    :return:
+    :rtype: str
+
+    >>> get_day_log_dir('/tmp/day-dir-test', 1416285412.541422)
+    '/tmp/day-dir-test/2014/11-18'
     """
     # We use localtime because the cron scheduling uses localtime.
     t = time.localtime(time_secs)
+
     day_log_dir = os.path.join(
         log_directory,
         time.strftime('%Y', t),

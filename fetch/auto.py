@@ -22,8 +22,7 @@ from setproctitle import setproctitle
 import arrow
 from croniter import croniter
 
-import fetch
-from fetch import ResultHandler, TaskFailureEmailer, RemoteFetchException, load
+from . import ResultHandler, TaskFailureEmailer, RemoteFetchException, load
 
 
 _log = logging.getLogger(__name__)
@@ -97,7 +96,8 @@ class ScheduledProcess(multiprocessing.Process):
         :type log_directory: str
         :type lock_directory: str
 
-        >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', fetch.EmptySource())
+        >>> from . import EmptySource
+        >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', EmptySource())
         >>> scheduled_time = 1416285412.541422
         >>> s = ScheduledProcess(None, item, scheduled_time, '/tmp/test-log', '/tmp/test-lock')
         >>> (s.name, s.log_file, s.lock_file)

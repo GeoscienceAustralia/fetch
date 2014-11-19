@@ -351,6 +351,17 @@ class RsyncMirrorSource(DataSource):
         )
 
 
+class EmptySource(DataSource):
+    """
+    Do nothing: useful for tests.
+    """
+    def trigger(self, reporter):
+        """
+        Do nothing: useful for tests.
+        """
+        _log.info('Triggered empty source.')
+
+
 class DateRangeSource(DataSource):
     """
     Repeat a source multiple times with different dates.

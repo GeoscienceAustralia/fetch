@@ -22,8 +22,8 @@ from setproctitle import setproctitle
 import arrow
 from croniter import croniter
 
-from . import ResultHandler, TaskFailureEmailer, RemoteFetchException
-from .load import load_yaml
+import fetch
+from fetch import ResultHandler, TaskFailureEmailer, RemoteFetchException, load
 
 
 _log = logging.getLogger(__name__)
@@ -96,6 +96,12 @@ class ScheduledProcess(multiprocessing.Process):
         :type scheduled_time: float
         :type log_directory: str
         :type lock_directory: str
+
+        >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', fetch.EmptySource())
+        >>> scheduled_time = 1416285412.541422
+        >>> s = ScheduledProcess(None, item, scheduled_time, '/tmp/test-log', '/tmp/test-lock')
+        >>> (s.name, s.log_file, s.lock_file)
+        ('fetch-1536-ls7-cpf', '/tmp/test-log/1536-ls7-cpf.log', '/tmp/test-lock/ls7-cpf.lck')
         """
         super(ScheduledProcess, self).__init__()
         id_ = item.sanitized_name
@@ -114,8 +120,7 @@ class ScheduledProcess(multiprocessing.Process):
 
         self.log_file = log_file
         self.lock_file = lock_file
-        self.id_ = id_
-        self.name = 'fetch {} {}'.format(scheduled_time_st, item.name)
+        self.name = 'fetch-{}-{}'.format(scheduled_time_st, id_)
         self.module = item.module
         self.reporter = reporter
         self.item = item
@@ -131,7 +136,7 @@ class ScheduledProcess(multiprocessing.Process):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
             sys.exit(0)
 
-        setproctitle(self.id_)
+        setproctitle(self.name)
         _log.debug('Triggering %s: %r', self.name, self.module)
         try:
 
@@ -338,7 +343,7 @@ class RunConfig(object):
         """
         Reload configuration
         """
-        config = load_yaml(self.config_path)
+        config = load.load_yaml(self.config_path)
 
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory

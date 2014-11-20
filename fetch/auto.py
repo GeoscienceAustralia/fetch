@@ -395,6 +395,13 @@ class NotifyResultHandler(ResultHandler):
         self.job_id = job_id
 
     def _announce_files_complete(self, source_uri, paths):
+        """
+        Announce on the message bus that files are complete.
+
+        No-op if there is no messaging configuration.
+        :type source_uri: str
+        :type paths: list of str
+        """
         _log.info('Completed %r -> %r', source_uri, paths)
         if self.config.messaging_settings:
             uris = [Uri.parse(path) for path in paths]

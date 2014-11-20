@@ -25,18 +25,26 @@ class TestLoad(unittest.TestCase):
         if source_config != reparsed_config:
             self._fail_with_diff(reparsed_config, source_config)
 
-    def test_dump_load_obj(self):
-        original_config = load.Config.from_dict(_make_config())
+    def _check_load_dump_config(self, make_config):
+        original_config = load.Config.from_dict(make_config())
         config_file_path = Path(files.temp_dir(tempfile.tempdir, prefix='testrun'), 'config.yaml')
-
         with config_file_path.open(mode='w') as f:
             yaml = load.dump_yaml(original_config)
             f.write(unicode(yaml))
-
         reparsed_config = load.load_yaml(str(config_file_path))
+        if make_config() != reparsed_config.to_dict():
+            self._fail_with_diff(make_config(), reparsed_config.to_dict())
 
-        if _make_config() != reparsed_config.to_dict():
-            self._fail_with_diff(_make_config(), reparsed_config.to_dict())
+    def test_dump_load_obj_full(self):
+        self._check_load_dump_config(_make_config)
+
+    def test_dump_load_obj_no_messaing(self):
+        def make_config_no_messaging():
+            c = _make_config()
+            del c['messaging']
+            return c
+
+        self._check_load_dump_config(make_config_no_messaging)
 
 
 def print_simple_obj_diff(dict1, dict2):
@@ -96,6 +104,11 @@ def _make_config():
         'directory': '/tmp/anc-fetch',
         'notify': {
             'email': ['jeremy.hooke@ga.gov.au']
+        },
+        'messaging': {
+            'host': 'rhe-pma-test08.test.lan',
+            'username': 'fetch',
+            'password': 'fetch'
         },
         'rules': {
             'LS5 CPF': {

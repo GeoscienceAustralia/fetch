@@ -12,6 +12,7 @@ import yaml.resolver
 
 from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
+from neocommon.message import MessengerConnection
 
 
 _log = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, rules, notify_addresses):
+    def __init__(self, directory, rules, notify_addresses, messaging_settings=None):
         """
         :type directory: str
         :type rules: set of ScheduledItem
@@ -136,6 +137,11 @@ class Config(object):
 
         self.notify_addresses = notify_addresses
 
+        if messaging_settings:
+            verify_can_construct(MessengerConnection, messaging_settings, identifier='messaging settings')
+
+        self.messaging_settings = messaging_settings
+
     @classmethod
     def from_dict(cls, config):
         """
@@ -146,6 +152,7 @@ class Config(object):
         """
 
         directory = config.get('directory')
+        messaging_settings = config.get('messaging')
 
         notify_email_addresses = []
         if 'notify' in config:
@@ -160,18 +167,19 @@ class Config(object):
                                      process=fields.get('process'))
                 rules.add(item)
 
-        return Config(directory, rules, notify_email_addresses)
+        return Config(directory, rules, notify_email_addresses, messaging_settings=messaging_settings)
 
     def to_dict(self):
         """
         Convert to simple dict format (expected by our YAML output)
         :return:
         """
-        return {
+        return _remove_nones({
             'directory': self.directory,
             'notify': {
                 'email': self.notify_addresses
             },
+            'messaging': self.messaging_settings,
             'rules': dict([
                 (
                     r.name, _remove_nones({
@@ -182,7 +190,7 @@ class Config(object):
                 )
                 for r in self.rules
             ])
-        }
+        })
 
 
 def _remove_nones(dict_):

@@ -5,11 +5,18 @@
 #  -> Viewable here: http://rhe-neo-dev-repo.dev.lan/git/blob/pma!on-receipt.git/mkII/onreceipt!fetch!README.md
 
 # The work directory (for log and lock files):
-directory: /data/ancillary-fetch
+directory: /data/fetch
 
 # Notification settings (for errors):
 notify:
   email: ['jeremy.hooke@ga.gov.au']
+
+# Message bus config, for announcing arrivals.
+messaging:
+  host: rhe-neo-dev01.dev.lan
+  # virtual_host:
+  username: fetch
+  password: fetch
 
 # Download rules:
 rules:

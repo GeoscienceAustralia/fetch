@@ -18,6 +18,7 @@ import time
 import multiprocessing
 import signal
 from setproctitle import setproctitle
+from neocommon import message, Uri
 
 import arrow
 from croniter import croniter
@@ -168,6 +169,7 @@ class ScheduledProcess(multiprocessing.Process):
             # TODO: Create processing pool?
             # Use for post processing (and/or multiple concurrent downloads?)
             self.module.trigger(WrapHandler(self.item, self.reporter))
+            _log.debug('Module completed.')
 
         except RemoteFetchException as e:
             print('-' * 10)
@@ -338,6 +340,8 @@ class RunConfig(object):
         self.lock_directory = None
         #: :type: list of fetch.TaskFailureListener
         self.notifiers = []
+        #: :type: dict of (str, str)
+        self.messaging_settings = None
 
     def load(self):
         """
@@ -347,6 +351,7 @@ class RunConfig(object):
 
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
+        self.messaging_settings = config.messaging_settings
 
         self.notifiers = []
         if config.notify_addresses:
@@ -365,18 +370,55 @@ class RunConfig(object):
         if not os.path.exists(self.log_directory):
             os.makedirs(self.log_directory)
 
+    def message_config(self):
+        """
+        Get a messaging connection configured with our settings.
+
+        (For use with neocommon.message.NeoMessenger)
+
+        :rtype message.MessengerConnection
+        """
+        return message.MessengerConnection(**self.messaging_settings)
+
 
 class NotifyResultHandler(ResultHandler):
     """
     For now, we print events to the log.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, job_id):
         """
         :type config: RunConfig
         """
         super(NotifyResultHandler, self).__init__()
         self.config = config
+        self.job_id = job_id
+
+    def _announce_files_complete(self, source_uri, paths):
+        _log.info('Completed %r -> %r', source_uri, paths)
+        if self.config.messaging_settings:
+            uris = [Uri.parse(path) for path in paths]
+            with message.NeoMessenger(self.config.message_config()) as msg:
+                msg.announce_ancillary(
+                    message.AncillaryUpdate(
+                        ancillary_type=self.job_id,
+                        uris=uris,
+                        properties={
+                            'source-uri': source_uri
+                        }
+                    )
+                )
+
+    def files_complete(self, source_uri, paths):
+        """
+        Call on completion of multiple files.
+
+        Some implementations may override this for more efficient bulk handling files.
+        :param source_uri:
+        :param paths:
+        :return:
+        """
+        self._announce_files_complete(source_uri, paths)
 
     def file_complete(self, source_uri, path):
         """
@@ -384,7 +426,7 @@ class NotifyResultHandler(ResultHandler):
         :type source_uri: str
         :type path: str
         """
-        _log.info('Completed %r: %r -> %r', os.path.basename(path), source_uri, path)
+        self._announce_files_complete(source_uri, [path])
 
     def file_error(self, uri, summary, body):
         """
@@ -418,9 +460,6 @@ def run_loop(config_path):
 
     _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
 
-    # TODO: Report arriving ancillary files on the message bus.
-    reporter = NotifyResultHandler(o)
-
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor
     running_children = set()
@@ -446,6 +485,8 @@ def run_loop(config_path):
             # Trigger time has passed, so let's run it.
 
             scheduled_time, scheduled_item = o.schedule.pop_next()
+
+            reporter = NotifyResultHandler(o, scheduled_item.sanitized_name)
 
             p = _run_item(
                 reporter,

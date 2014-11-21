@@ -352,10 +352,12 @@ class RunConfig(object):
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
         self.messaging_settings = config.messaging_settings
+        _log.info('%s messaging configuration.', 'Loaded' if config.messaging_settings else 'No')
 
         self.notifiers = []
         if config.notify_addresses:
             self.notifiers.append(TaskFailureEmailer(config.notify_addresses))
+        _log.info('%s addresses for error notification: %s', len(config.notify_addresses), config.notify_addresses)
 
         if not os.path.exists(self.base_directory):
             raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
@@ -363,10 +365,12 @@ class RunConfig(object):
         # Cannot change lock directory 'live'
         if not self.lock_directory:
             self.lock_directory = os.path.join(self.base_directory, 'lock')
+            _log.info('Using lock directory %s', self.lock_directory)
             if not os.path.exists(self.lock_directory):
                 os.makedirs(self.lock_directory)
 
         self.log_directory = os.path.join(self.base_directory, 'log')
+        _log.info('Using log directory %s', self.log_directory)
         if not os.path.exists(self.log_directory):
             os.makedirs(self.log_directory)
 

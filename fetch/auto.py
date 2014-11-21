@@ -316,7 +316,7 @@ class Schedule(object):
 
         next_trigger = croniter(item.cron_pattern, start_time=base_date).get_next()
 
-        _log.debug('Next action %r: %s', item.name, arrow.get(next_trigger).humanize())
+        _log.debug('Scheduled action %r: %s', item.name, arrow.get(next_trigger).humanize())
         heapq.heappush(self.schedule, (next_trigger, item))
         return next_trigger
 

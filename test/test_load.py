@@ -110,6 +110,9 @@ def _make_config():
             'username': 'fetch',
             'password': 'fetch'
         },
+        'log': {
+            'fetch': 'DEBUG'
+        },
         'rules': {
             'LS5 CPF': {
                 'schedule': '0 * * * *',

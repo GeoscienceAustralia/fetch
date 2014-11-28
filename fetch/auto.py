@@ -342,6 +342,9 @@ class RunConfig(object):
         self.notifiers = []
         #: :type: dict of (str, str)
         self.messaging_settings = None
+        # Key-values are log names and levels.
+        #: :type: dict of (str, str)
+        self.log_levels = None
 
     def load(self):
         """
@@ -352,6 +355,7 @@ class RunConfig(object):
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
         self.messaging_settings = config.messaging_settings
+
         _log.info('%s messaging configuration.', 'Loaded' if config.messaging_settings else 'No')
 
         self.notifiers = []
@@ -373,6 +377,10 @@ class RunConfig(object):
         _log.info('Using log directory %s', self.log_directory)
         if not os.path.exists(self.log_directory):
             os.makedirs(self.log_directory)
+
+        if config.log_levels != self.log_levels:
+            _set_logging_levels(config.log_levels)
+            self.log_levels = config.log_levels
 
     def message_config(self):
         """
@@ -452,25 +460,11 @@ class NotifyResultHandler(ResultHandler):
             notifier.on_file_failure(None, uri, summary, body)
 
 
-def run_loop(config_path):
+def run_loop(o):
     """
     Main loop
+    :type o: RunConfig
     """
-    o = RunConfig(config_path)
-    o.load()
-
-    def trigger_exit(signal_, frame_):
-        """Start a graceful shutdown"""
-        o.are_exiting = True
-
-    def trigger_reload(signal_, frame_):
-        """Handle signal to reload config"""
-        _log.info('Reloading configuration')
-        o.load()
-        _log.debug('%s rules loaded', len(o.schedule.schedule))
-
-    _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
-
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor
     running_children = set()
@@ -532,14 +526,59 @@ def run_loop(config_path):
     _on_shutdown(running_children, o.notifiers)
 
 
+def init_run_config(config_path):
+    """
+    Load configuration and initialise signal handlers.
+
+    :param config_path: Path to config (YAML) file.
+    :type config_path: str
+    :rtype: RunConfig
+    """
+    o = RunConfig(config_path)
+    o.load()
+
+    def trigger_exit(signal_, frame_):
+        """Start a graceful shutdown"""
+        o.are_exiting = True
+
+    def trigger_reload(signal_, frame_):
+        """Handle signal to reload config"""
+        _log.info('Reloading configuration')
+        o.load()
+        _log.debug('%s rules loaded', len(o.schedule.schedule))
+
+    _init_signals(trigger_exit=trigger_exit, trigger_reload=trigger_reload)
+
+    return o
+
+
+def _set_logging_levels(levels):
+    """
+    Set log levels
+    :type levels: dict of (str, str)
+    :return:
+
+    >>> _set_logging_levels({'fetch.test.some_module': 'DEBUG'})
+    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel()
+    'DEBUG'
+    >>> _set_logging_levels({'fetch.test.some_module': 'WARN'})
+    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel()
+    'WARN'
+    """
+    for name, level in levels.iteritems():
+        lg = logging.getLogger(name)
+        lg.setLevel(getattr(logging, level.upper()))
+
+
 _LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
 _LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _LOG_HANDLER.setFormatter(_LOG_FORMATTER)
 
 if __name__ == '__main__':
     logging.getLogger().addHandler(_LOG_HANDLER)
-    logging.getLogger().setLevel(logging.WARNING)
 
+    # Default logging levels. These can be overridden when the config file is loaded.
+    logging.getLogger().setLevel(logging.WARNING)
     logging.getLogger('neocommon').setLevel(logging.INFO)
     logging.getLogger('fetch').setLevel(logging.INFO)
     _log.setLevel(logging.DEBUG)
@@ -550,4 +589,4 @@ if __name__ == '__main__':
         ])
         sys.exit(1)
 
-    run_loop(sys.argv[1])
+    run_loop(init_run_config(sys.argv[1]))

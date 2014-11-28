@@ -6,6 +6,7 @@ import functools
 import logging
 import os
 import inspect
+
 from croniter import croniter
 import yaml
 import yaml.resolver
@@ -122,7 +123,7 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, rules, notify_addresses, messaging_settings=None):
+    def __init__(self, directory, rules, notify_addresses, messaging_settings=None, log_levels=None):
         """
         :type directory: str
         :type rules: set of ScheduledItem
@@ -141,6 +142,7 @@ class Config(object):
             verify_can_construct(MessengerConnection, messaging_settings, identifier='messaging settings')
 
         self.messaging_settings = messaging_settings
+        self.log_levels = log_levels
 
     @classmethod
     def from_dict(cls, config):
@@ -153,6 +155,7 @@ class Config(object):
 
         directory = config.get('directory')
         messaging_settings = config.get('messaging')
+        log_levels = config.get('log')
 
         notify_email_addresses = []
         if 'notify' in config:
@@ -167,7 +170,13 @@ class Config(object):
                                      process=fields.get('process'))
                 rules.add(item)
 
-        return Config(directory, rules, notify_email_addresses, messaging_settings=messaging_settings)
+        return Config(
+            directory,
+            rules,
+            notify_email_addresses,
+            messaging_settings=messaging_settings,
+            log_levels=log_levels
+        )
 
     def to_dict(self):
         """
@@ -179,6 +188,7 @@ class Config(object):
             'notify': {
                 'email': self.notify_addresses
             },
+            'log': self.log_levels,
             'messaging': self.messaging_settings,
             'rules': dict([
                 (

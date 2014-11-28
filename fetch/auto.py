@@ -559,11 +559,11 @@ def _set_logging_levels(levels):
     :return:
 
     >>> _set_logging_levels({'fetch.test.some_module': 'DEBUG'})
-    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel()
-    'DEBUG'
+    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel() == logging.DEBUG
+    True
     >>> _set_logging_levels({'fetch.test.some_module': 'WARN'})
-    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel()
-    'WARN'
+    >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel() == logging.WARN
+    True
     """
     for name, level in levels.iteritems():
         lg = logging.getLogger(name)

@@ -218,7 +218,7 @@ def _remove_nones(dict_):
     >>> _remove_nones({})
     {}
     """
-    return dict([(k, v) for k, v in dict_.iteritems() if v is not None])
+    return {k: v for k, v in dict_.iteritems() if v is not None}
 
 
 def _load_config_dict(file_io):
@@ -325,10 +325,9 @@ def _init_yaml_handling():
         :param data:
         :return:
         """
-        clean_dict = dict((k, v) for k, v in data.__dict__.iteritems() if v is not None)
         return dumper.represent_mapping(
             tag,
-            clean_dict,
+            _remove_nones(data.__dict__),
             flow_style=flow_style
         )
 

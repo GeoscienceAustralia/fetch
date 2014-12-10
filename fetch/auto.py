@@ -122,6 +122,7 @@ class ScheduledProcess(multiprocessing.Process):
         self.log_file = log_file
         self.lock_file = lock_file
         self.name = 'fetch-{}-{}'.format(scheduled_time_st, id_)
+        self.scheduled_time = scheduled_time
         self.module = item.module
         self.reporter = reporter
         self.item = item
@@ -151,24 +152,33 @@ class ScheduledProcess(multiprocessing.Process):
                 :type item: ScheduledItem
                 :type reporter: fetch.ResultHandler
                 """
-                def __init__(self, item, reporter):
+                def __init__(self, item, scheduled_time, reporter):
                     self.item = item
                     self.reporter = reporter
+                    self.scheduled_time = scheduled_time
 
-                def file_complete(self, source_uri, path):
+                def file_complete(self, source_uri, path, msg_metadata=None):
                     """
                     Call on completion of a file
                     :type source_uri: str
                     :type path: str
+                    :type msg_metadata: dict of (str, str)
                     """
                     if self.item.process:
                         path = self.item.process.process(path)
 
-                    self.reporter.file_complete(source_uri, path)
+                    md = msg_metadata or {}
+                    md.update({
+                        'fetch-cron-pattern': self.item.cron_pattern,
+                        'fetch-trigger-name': self.item.name,
+                        'fetch-trigger-time': time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(self.scheduled_time)),
+                    })
+
+                    self.reporter.file_complete(source_uri, path, msg_metadata=md)
 
             # TODO: Create processing pool?
             # Use for post processing (and/or multiple concurrent downloads?)
-            self.module.trigger(WrapHandler(self.item, self.reporter))
+            self.module.trigger(WrapHandler(self.item, self.scheduled_time, self.reporter))
             _log.debug('Module completed.')
 
         except RemoteFetchException as e:
@@ -406,7 +416,7 @@ class NotifyResultHandler(ResultHandler):
         self.config = config
         self.job_id = job_id
 
-    def _announce_files_complete(self, source_uri, paths):
+    def _announce_files_complete(self, source_uri, paths, msg_metadata=None):
         """
         Announce on the message bus that files are complete.
 
@@ -414,6 +424,11 @@ class NotifyResultHandler(ResultHandler):
         :type source_uri: str
         :type paths: list of str
         """
+        md = msg_metadata or {}
+        md.update({
+            'source-uri': source_uri
+        })
+
         _log.info('Completed %r -> %r', source_uri, paths)
         if self.config.messaging_settings:
             uris = [Uri.parse(path) for path in paths]
@@ -422,27 +437,27 @@ class NotifyResultHandler(ResultHandler):
                     message.AncillaryUpdate(
                         ancillary_type=self.job_id,
                         uris=uris,
-                        properties={
-                            'source-uri': source_uri
-                        }
+                        properties=md
                     )
                 )
 
-    def files_complete(self, source_uri, paths):
+    def files_complete(self, source_uri, paths, msg_metadata=None):
         """
         Call on completion of multiple files.
 
         Some implementations may override this for more efficient bulk handling files.
         :param source_uri:
         :param paths:
+        :type msg_metadata: dict of (str, str)
         :return:
         """
         self._announce_files_complete(source_uri, paths)
 
-    def file_complete(self, source_uri, path):
+    def file_complete(self, source_uri, path, msg_metadata=None):
         """
         :type source_uri: str
         :type source_uri: str
+        :type msg_metadata: dict of (str, str)
         :type path: str
         """
         self._announce_files_complete(source_uri, [path])

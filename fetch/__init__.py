@@ -86,23 +86,24 @@ class ResultHandler(object):
         """
         pass
 
-    def files_complete(self, source_uri, paths):
+    def files_complete(self, source_uri, paths, msg_metadata=None):
         """
         Call on completion of multiple files.
 
         Some implementations may override this for more efficient bulk handling files.
-        :param source_uri:
-        :param paths:
-        :return:
+        :type source_uri: str
+        :type paths: list of str
+        :type msg_metadata: dict of (str, str)
         """
         for path in paths:
-            self.file_complete(source_uri, path)
+            self.file_complete(source_uri, path, msg_metadata=msg_metadata)
 
-    def file_complete(self, source_uri, path):
+    def file_complete(self, source_uri, path, msg_metadata=None):
         """
         Call on completion of a file
         :type source_uri: str
         :type path: str
+        :type msg_metadata: dict of (str, str)
         """
         pass
 

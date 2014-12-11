@@ -8,8 +8,8 @@ import re
 
 from . import DataSource, fetch_file
 
-
 _log = logging.getLogger(__name__)
+DEFAULT_SOCKET_TIMEOUT_SECS = 60 * 5.0
 
 
 def _fetch_files(hostname,
@@ -31,7 +31,7 @@ def _fetch_files(hostname,
     :type reporter: ResultHandler
     """
 
-    ftp = ftplib.FTP(hostname)
+    ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
     try:
         ftp.login()
 

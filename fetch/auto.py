@@ -480,6 +480,8 @@ def run_loop(o):
     Main loop
     :type o: RunConfig
     """
+    logging.getLogger().addHandler(_LOG_HANDLER)
+
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor
     running_children = set()
@@ -590,19 +592,4 @@ _LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
 _LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _LOG_HANDLER.setFormatter(_LOG_FORMATTER)
 
-if __name__ == '__main__':
-    logging.getLogger().addHandler(_LOG_HANDLER)
 
-    # Default logging levels. These can be overridden when the config file is loaded.
-    logging.getLogger().setLevel(logging.WARNING)
-    logging.getLogger('neocommon').setLevel(logging.INFO)
-    logging.getLogger('fetch').setLevel(logging.INFO)
-    _log.setLevel(logging.DEBUG)
-
-    if len(sys.argv) != 2:
-        sys.stderr.writelines([
-            'Usage: fetch-service <config.yaml>\n'
-        ])
-        sys.exit(1)
-
-    run_loop(init_run_config(sys.argv[1]))

@@ -4,7 +4,7 @@ Download ancillary data automatically.
 
 It is run with one argument: a config file location
 
-    python -m fetch.auto config.yaml
+    python -m fetch config.yaml
 
 ## Configuration file
 

@@ -583,6 +583,7 @@ def _set_logging_levels(levels):
     for name, level in levels.iteritems():
         lg = logging.getLogger(name)
         lg.setLevel(getattr(logging, level.upper()))
+        _log.info('Set log level %s to %s', name, level)
 
 
 _LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)

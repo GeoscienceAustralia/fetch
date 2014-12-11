@@ -451,7 +451,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :return:
         """
-        self._announce_files_complete(source_uri, paths)
+        self._announce_files_complete(source_uri, paths, msg_metadata=msg_metadata)
 
     def file_complete(self, source_uri, path, msg_metadata=None):
         """
@@ -460,7 +460,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :type path: str
         """
-        self._announce_files_complete(source_uri, [path])
+        self._announce_files_complete(source_uri, [path], msg_metadata=msg_metadata)
 
     def file_error(self, uri, summary, body):
         """

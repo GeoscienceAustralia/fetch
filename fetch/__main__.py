@@ -1,8 +1,14 @@
+"""
+Automatically download ancillary, given
+a YAML config file. See the auto module.
+"""
+
 import logging
 import sys
 from . import auto
 
-if __name__ == '__main__':
+
+def main():
     # Default logging levels. These can be overridden when the config file is loaded.
     logging.getLogger().setLevel(logging.WARNING)
     logging.getLogger('neocommon').setLevel(logging.INFO)
@@ -16,3 +22,6 @@ if __name__ == '__main__':
 
     run_config = auto.init_run_config(sys.argv[1])
     auto.run_loop(run_config)
+
+if __name__ == '__main__':
+    main()

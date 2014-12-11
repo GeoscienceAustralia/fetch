@@ -9,6 +9,9 @@ from . import auto
 
 
 def main():
+    """
+    Run
+    """
     # Default logging levels. These can be overridden when the config file is loaded.
     logging.getLogger().setLevel(logging.WARNING)
     logging.getLogger('neocommon').setLevel(logging.INFO)

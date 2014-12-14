@@ -5,7 +5,6 @@ a YAML config file. See the auto module.
 
 import logging
 import sys
-from . import auto
 
 
 def main():
@@ -23,6 +22,7 @@ def main():
         ])
         sys.exit(1)
 
+    from . import auto
     run_config = auto.init_run_config(sys.argv[1])
     auto.run_loop(run_config)
 

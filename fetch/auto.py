@@ -61,7 +61,7 @@ def _redirect_output(log_file):
     output = open(log_file, 'w')
     sys.stdout = output
     sys.stderr = output
-    logging.getLogger().removeHandler(_LOG_HANDLER)
+    logging_clear()
     handler = logging.StreamHandler(stream=output)
     handler.setFormatter(_LOG_FORMATTER)
     logging.getLogger().addHandler(handler)
@@ -475,12 +475,25 @@ class NotifyResultHandler(ResultHandler):
             notifier.on_file_failure(None, uri, summary, body)
 
 
+def logging_init():
+    """
+    Add logging handlers
+    """
+    logging.getLogger().addHandler(_LOG_HANDLER)
+
+
+def logging_clear():
+    """
+    Remove logging handlers
+    """
+    logging.getLogger().removeHandler(_LOG_HANDLER)
+
+
 def run_loop(o):
     """
     Main loop
     :type o: RunConfig
     """
-    logging.getLogger().addHandler(_LOG_HANDLER)
 
     # Keep track of running children to view their exit codes later.
     # : :type: set of ScheduledProcessor

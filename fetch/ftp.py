@@ -6,7 +6,7 @@ import logging
 import os
 import re
 
-from . import DataSource, fetch_file
+from . import DataSource, fetch_file, RemoteFetchException
 
 _log = logging.getLogger(__name__)
 DEFAULT_SOCKET_TIMEOUT_SECS = 60 * 5.0
@@ -31,7 +31,15 @@ def _fetch_files(hostname,
     :type reporter: ResultHandler
     """
 
-    ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
+    try:
+        ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
+    except:
+        _log.exception('Error connecting to FTP')
+        raise RemoteFetchException(
+            'Error connecting to FTP',
+            'host: {}, timeout: {}'.format(hostname, DEFAULT_SOCKET_TIMEOUT_SECS)
+        )
+
     try:
         ftp.login()
 

@@ -29,10 +29,12 @@ def filename_from_url(url):
     return url.split('/')[-1]
 
 
-
-
-
 class HttpPostAction(SimpleObject):
+    """
+    Perform a simple HTTP-Post. Intended for use as a pre-action.
+
+    (such as posting login credentials before retrievals)
+    """
     def __init__(self, url, params):
         """
         :type url: str
@@ -41,11 +43,19 @@ class HttpPostAction(SimpleObject):
         self.url = url
         self.params = params
 
-    def do(self, session):
+    def get_result(self, session):
+        """
+        Return the closing result of the action.
+
+        :type session: requests.Session
+        """
         return closing(session.post(self.url, params=self.params))
 
 
 class _HttpBaseSource(DataSource):
+    """
+    Base class for HTTP retrievals.
+    """
     def __init__(self, target_dir, url=None, urls=None, filename_transform=None, pre_action=None):
         """
         :type urls: list of str
@@ -90,7 +100,7 @@ class _HttpBaseSource(DataSource):
         session = requests.session()
 
         if self.pre_action:
-            with self.pre_action.do(session) as res:
+            with self.pre_action.get_result(session) as res:
                 if res.status_code != 200:
                     _log.error('Status code %r received for %r.', res.status_code, self.pre_action)
                     _log.debug('Error received text: %r', res.text)
@@ -264,7 +274,6 @@ class RssSource(_HttpBaseSource):
                 file_url,
                 session=session
             )
-
 
 
 

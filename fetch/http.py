@@ -56,26 +56,23 @@ class _HttpBaseSource(DataSource):
     """
     Base class for HTTP retrievals.
     """
-    def __init__(self, target_dir, url=None, urls=None, filename_transform=None, pre_action=None):
+    def __init__(self, target_dir, url=None, urls=None, filename_transform=None, beforehand=None):
         """
         :type urls: list of str
         :type url: str
         :type target_dir: str
-        :type pre_action: HttpPostAction
+        :type beforehand: HttpPostAction
         :type filename_transform: FilenameTransform
         """
         super(_HttpBaseSource, self).__init__()
         self.target_dir = target_dir
-        self.pre_action = pre_action
+        self.beforehand = beforehand
 
         self.filename_transform = filename_transform
 
         # Can either specify one URL or a list of URLs
         self.url = url
         self.urls = urls
-
-        if url is None and not urls:
-            raise RuntimeError("HTTP type requires either 'url' or 'urls' parameter.")
 
     def _get_all_urls(self):
         """
@@ -97,15 +94,19 @@ class _HttpBaseSource(DataSource):
 
         :type reporter: ResultHandler
         """
+        all_urls = self._get_all_urls()
+        if not all_urls:
+            raise RuntimeError("HTTP type requires either 'url' or 'urls'.")
+
         session = requests.session()
 
-        if self.pre_action:
-            with self.pre_action.get_result(session) as res:
+        if self.beforehand:
+            with self.beforehand.get_result(session) as res:
                 if res.status_code != 200:
-                    _log.error('Status code %r received for %r.', res.status_code, self.pre_action)
+                    _log.error('Status code %r received for %r.', res.status_code, self.beforehand)
                     _log.debug('Error received text: %r', res.text)
 
-        for url in self._get_all_urls():
+        for url in all_urls:
             self.trigger_url(reporter, session, url)
 
     def trigger_url(self, reporter, session, url):
@@ -185,10 +186,10 @@ class HttpListingSource(_HttpBaseSource):
     A pattern can be supplied to limit files by filename.
     """
 
-    def __init__(self, target_dir, url=None, urls=None, name_pattern='.*', filename_transform=None, pre_action=None):
+    def __init__(self, target_dir, url=None, urls=None, name_pattern='.*', filename_transform=None, beforehand=None):
         super(HttpListingSource, self).__init__(target_dir, url=url, urls=urls,
                                                 filename_transform=filename_transform,
-                                                pre_action=pre_action)
+                                                pre_action=beforehand)
         self.name_pattern = name_pattern
 
     def trigger_url(self, reporter, session, url):

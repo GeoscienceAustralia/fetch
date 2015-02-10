@@ -189,7 +189,7 @@ class HttpListingSource(_HttpBaseSource):
     def __init__(self, target_dir, url=None, urls=None, name_pattern='.*', filename_transform=None, beforehand=None):
         super(HttpListingSource, self).__init__(target_dir, url=url, urls=urls,
                                                 filename_transform=filename_transform,
-                                                pre_action=beforehand)
+                                                beforehand=beforehand)
         self.name_pattern = name_pattern
 
     def trigger_url(self, reporter, session, url):

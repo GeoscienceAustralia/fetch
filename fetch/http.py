@@ -101,6 +101,7 @@ class _HttpBaseSource(DataSource):
         session = requests.session()
 
         if self.beforehand:
+            _log.debug('Triggering %r', self.beforehand)
             with self.beforehand.get_result(session) as res:
                 if res.status_code != 200:
                     _log.error('Status code %r received for %r.', res.status_code, self.beforehand)

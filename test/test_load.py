@@ -1,9 +1,10 @@
-
 from __future__ import print_function
 
 import tempfile
 import unittest
+
 from pathlib import Path
+
 from fetch import load
 from neocommon import files
 
@@ -117,30 +118,30 @@ def _make_config():
             'LS5 CPF': {
                 'schedule': '0 * * * *',
                 'source': http.RssSource(
-                    'https://landsat.usgs.gov/L5CPFRSS.rss',
-                    anc_data + '/sensor-specific/LANDSAT5/CalibrationParameterFile'
+                    url='https://landsat.usgs.gov/L5CPFRSS.rss',
+                    target_dir=anc_data + '/sensor-specific/LANDSAT5/CalibrationParameterFile'
                 )
             },
             'LS7 CPF': {
                 'schedule': '10 * * * *',
                 'source': http.RssSource(
-                    'http://landsat.usgs.gov/L7CPFRSS.rss',
-                    anc_data + '/sensor-specific/LANDSAT7/CalibrationParameterFile'
+                    url='http://landsat.usgs.gov/L7CPFRSS.rss',
+                    target_dir=anc_data + '/sensor-specific/LANDSAT7/CalibrationParameterFile'
                 )
             },
             'LS8 CPF': {
                 'schedule': '*/30 * 1 1,4,7,10 *',
                 'source': http.RssSource(
-                    'http://landsat.usgs.gov/cpf.rss',
-                    anc_data + '/sensor-specific/LANDSAT8/CalibrationParameterFile'
+                    url='http://landsat.usgs.gov/cpf.rss',
+                    target_dir=anc_data + '/sensor-specific/LANDSAT8/CalibrationParameterFile'
                 )
             },
             'LS8 BPF': {
                 'schedule': '*/15 * * * *',
                 # -> Avail. 2-4 hours after acquisition
                 'source': http.RssSource(
-                    'http://landsat.usgs.gov/bpf.rss',
-                    anc_data + '/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}',
+                    url='http://landsat.usgs.gov/bpf.rss',
+                    target_dir=anc_data + '/sensor-specific/LANDSAT8/BiasParameterFile/{year}/{month}',
                     filename_transform=RegexpOutputPathTransform(
                         # Extract year and month from filenames to use in destination directory
                         'L[TO]8BPF(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2}).*'
@@ -150,23 +151,27 @@ def _make_config():
             'LS8 TLE': {
                 'schedule': '20 * * * *',
                 'source': http.RssSource(
-                    'http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
-                    anc_data + '/sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
+                    url='http://landsat.usgs.gov/exchange_cache/outgoing/TLE/TLE.rss',
+                    target_dir=anc_data + '/sensor-specific/LANDSAT8/TLE/LS8_YEAR/{year}',
                     filename_transform=RegexpOutputPathTransform(
                         # Extract year from the filename to use in the output directory.
                         # Example filename: 506_MOE_ACQ_2014288120000_2014288120000_2014288123117_OPS_TLE.txt
                         '([A-Z0-9]+_){3}(?P<year>[0-9]{4})(?P<jul>[0-9]{3})[0-9]{6}.*_OPS_TLE.txt'
-                    )
+                    ),
+                    pre_action=http.HttpPostAction(
+                        url='https://landsat.usgs.gov/up_login.php',
+                        params={"username": "australia",
+                                "password": "fake-password"})
                 )
             },
             'Modis utcpole-leapsec': {
                 'schedule': '0 7 * * mon',
                 'source': http.HttpSource(
-                    [
+                    urls=[
                         'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat',
                         'http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat'
                     ],
-                    anc_data + '/sensor-specific/MODIS/',
+                    target_dir=anc_data + '/sensor-specific/MODIS/',
                 )
             },
             'Water vapour': {
@@ -200,7 +205,9 @@ def _make_config():
                     ),
                     overridden_properties={
                         'url': 'http://jpssdb.ssec.wisc.edu/ancillary/{year}_{month}_{day}_{julday}',
-                        'target_dir': anc_data + '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/{year}_{month}_{day}_{julday}',
+                        'target_dir': (anc_data +
+                                       '/sensor-specific/NPP/VIIRS/CSPP/anc/cache/'
+                                       '{year}_{month}_{day}_{julday}'),
                     },
                     # Repeat between 1 day ago to 1 day in the future:
                     start_day=-1,

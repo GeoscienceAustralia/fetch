@@ -11,6 +11,7 @@ from lxml import etree
 from urlparse import urljoin
 
 from . import DataSource, fetch_file, RemoteFetchException
+from fetch import SimpleObject
 
 
 _log = logging.getLogger(__name__)
@@ -28,43 +29,127 @@ def filename_from_url(url):
     return url.split('/')[-1]
 
 
-def _fetch_file(target_dir, target_name, reporter, url, override_existing=False, filename_transform=None):
-    """
-    Fetch the given URL to the target folder.
-
-    :type target_dir: str
-    :type target_name: str
-    :type reporter: ResultHandler
-    :type url: str
-    """
-
-    def do_fetch(t):
-        """Fetch data to filename t"""
-        with closing(requests.get(url, stream=True)) as res:
-            if res.status_code != 200:
-                body = res.text
-                _log.debug('Received text %r', res.text)
-                reporter.file_error(url, "Status code %r" % res.status_code, body)
-                return
-
-            with open(t, 'wb') as f:
-                for chunk in res.iter_content(4096):
-                    if chunk:
-                        f.write(chunk)
-                        f.flush()
-
-    fetch_file(
-        url,
-        do_fetch,
-        reporter,
-        target_name,
-        target_dir,
-        filename_transform=filename_transform,
-        override_existing=override_existing
-    )
 
 
-class HttpSource(DataSource):
+
+class HttpPostAction(SimpleObject):
+    def __init__(self, url, params):
+        """
+        :type url: str
+        :type params: dict of (str, str)
+        """
+        self.url = url
+        self.params = params
+
+    def do(self, session):
+        return closing(session.post(self.url, params=self.params))
+
+
+class _HttpBaseSource(DataSource):
+    def __init__(self, target_dir, url=None, urls=None, filename_transform=None, pre_action=None):
+        """
+        :type urls: list of str
+        :type url: str
+        :type target_dir: str
+        :type pre_action: HttpPostAction
+        :type filename_transform: FilenameTransform
+        """
+        super(_HttpBaseSource, self).__init__()
+        self.target_dir = target_dir
+        self.pre_action = pre_action
+
+        self.filename_transform = filename_transform
+
+        # Can either specify one URL or a list of URLs
+        self.url = url
+        self.urls = urls
+
+        if url is None and not urls:
+            raise RuntimeError("HTTP type requires either 'url' or 'urls' parameter.")
+
+    def _get_all_urls(self):
+        """
+        :rtype: list of str
+        """
+        all_urls = []
+        if self.urls:
+            all_urls.extend(self.urls)
+        if self.url:
+            all_urls.append(self.url)
+        return all_urls
+
+    def trigger(self, reporter):
+        """
+        Trigger a download from the configured URLs.
+
+        This will call the overridden trigger_url() function
+        for each URL.
+
+        :type reporter: ResultHandler
+        """
+        session = requests.session()
+
+        if self.pre_action:
+            with self.pre_action.do(session) as res:
+                if res.status_code != 200:
+                    _log.error('Status code %r received for %r.', res.status_code, self.pre_action)
+                    _log.debug('Error received text: %r', res.text)
+
+        for url in self._get_all_urls():
+            self.trigger_url(reporter, session, url)
+
+    def trigger_url(self, reporter, session, url):
+        """
+        Trigger for the given URL. Overridden by subclasses.
+        :type reporter: ResultHandler
+        :type session: requests.Session
+        :type url: str
+        """
+        raise NotImplementedError("Individual URL trigger not implemented")
+
+    def _fetch_file(self,
+                    target_name,
+                    reporter,
+                    url,
+                    session=requests,
+                    override_existing=False):
+        """
+        Utility method for fetching HTTP URL to the target folder.
+
+        :type target_dir: str
+        :type target_name: str
+        :type reporter: ResultHandler
+        :type session: requests.Session
+        :type url: str
+        """
+
+        def do_fetch(t):
+            """Fetch data to filename t"""
+            with closing(session.get(url, stream=True)) as res:
+                if res.status_code != 200:
+                    body = res.text
+                    _log.debug('Received text %r', res.text)
+                    reporter.file_error(url, "Status code %r" % res.status_code, body)
+                    return
+
+                with open(t, 'wb') as f:
+                    for chunk in res.iter_content(4096):
+                        if chunk:
+                            f.write(chunk)
+                            f.flush()
+
+        fetch_file(
+            url,
+            do_fetch,
+            reporter,
+            target_name,
+            self.target_dir,
+            filename_transform=self.filename_transform,
+            override_existing=override_existing
+        )
+
+
+class HttpSource(_HttpBaseSource):
     """
     Fetch static HTTP URLs.
 
@@ -72,48 +157,38 @@ class HttpSource(DataSource):
     repeatedly updated.
     """
 
-    def __init__(self, urls, target_dir):
+    def trigger_url(self, reporter, session, url):
         """
-        :type urls: list of str
-        :type target_dir: str
-        :return:
-        """
-        super(HttpSource, self).__init__()
-
-        self.urls = urls
-        self.target_dir = target_dir
-
-    def trigger(self, reporter):
-        """
-        Download all URLs, overriding existing.
+        Download URL, overriding existing.
         :type reporter: ResultHandler
-        :return:
+        :type session: requests.Session
+        :type url: str
         """
-        for url in self.urls:
-            name = filename_from_url(url)
-            _fetch_file(self.target_dir, name, reporter, url, override_existing=True)
+        name = filename_from_url(url)
+        self._fetch_file(name, reporter, url, session=session, override_existing=True)
 
 
-class HttpListingSource(DataSource):
+class HttpListingSource(_HttpBaseSource):
     """
     Fetch files from a HTTP listing page.
 
     A pattern can be supplied to limit files by filename.
     """
 
-    def __init__(self, url, target_dir, name_pattern='.*', filename_transform=None):
-        super(HttpListingSource, self).__init__()
-
-        self.url = url
+    def __init__(self, target_dir, url=None, urls=None, name_pattern='.*', filename_transform=None, pre_action=None):
+        super(HttpListingSource, self).__init__(target_dir, url=url, urls=urls,
+                                                filename_transform=filename_transform,
+                                                pre_action=pre_action)
         self.name_pattern = name_pattern
-        self.target_dir = target_dir
-        self.filename_transform = filename_transform
 
-    def trigger(self, reporter):
+    def trigger_url(self, reporter, session, url):
         """
         Download the given listing page, and any links that match the name pattern.
+        :type reporter: ResultHandler
+        :type session: requests.Session
+        :type url: str
         """
-        res = requests.get(self.url)
+        res = session.get(url)
         if res.status_code == 404:
             _log.debug("Listing page doesn't exist yet. Skipping.")
             return
@@ -123,7 +198,7 @@ class HttpListingSource(DataSource):
             # Throw an exception instead.
             raise RemoteFetchException(
                 "Status code %r" % res.status_code,
-                '{url}\n\n{body}'.format(url=self.url, body=res.text)
+                '{url}\n\n{body}'.format(url=url, body=res.text)
             )
 
         page = etree.fromstring(res.text, parser=etree.HTMLParser())
@@ -144,63 +219,50 @@ class HttpListingSource(DataSource):
                 _log.info("Filename (%r) doesn't match pattern, skipping.", name)
                 continue
 
-            _fetch_file(
-                self.target_dir,
+            self._fetch_file(
                 name,
                 reporter,
                 source_url,
-                filename_transform=self.filename_transform
+                session=session
             )
 
 
-class RssSource(DataSource):
+class RssSource(_HttpBaseSource):
     """
     Fetch any files from the given RSS URL.
 
     The title of feed entries is assumed to be the filename.
     """
 
-    def __init__(self, url, target_dir, filename_transform=None):
-        """
-        :type url: str
-        :type target_dir: str
-        :type filename_transform: FilenameTransform
-        :return:
-        """
-        super(RssSource, self).__init__()
-
-        self.url = url
-        self.target_dir = target_dir
-
-        self.filename_transform = filename_transform
-
-    def trigger(self, reporter):
+    def trigger_url(self, reporter, session, url):
         """
         Download RSS feed and fetch missing files.
+        :type reporter: ResultHandler
+        :type session: requests.Session
+        :type url: str
         """
         # Fetch feed.
-        res = requests.get(self.url)
+        res = session.get(url)
 
         if res.status_code != 200:
             # We don't bother with reporter.file_error() as this initial fetch is critical.
             # Throw an exception instead.
             raise RemoteFetchException(
                 "Status code %r" % res.status_code,
-                '{url}\n\n{body}'.format(url=self.url, body=res.text)
+                '{url}\n\n{body}'.format(url=url, body=res.text)
             )
 
         feed = feedparser.parse(res.text)
 
         for entry in feed.entries:
-            name = entry.title
-            url = entry.link
+            file_name = entry.title
+            file_url = entry.link
 
-            _fetch_file(
-                self.target_dir,
-                name,
+            self._fetch_file(
+                file_name,
                 reporter,
-                url,
-                filename_transform=self.filename_transform
+                file_url,
+                session=session
             )
 
 

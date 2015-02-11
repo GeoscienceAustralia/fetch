@@ -24,7 +24,7 @@ rules:
     schedule: '0 9 * * 6'
     source: !rsync
       source_host: lpgs@r-dm.nci.org.au
-      source_path: /g/data1/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*
+      source_path: /g/data/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*
       target_path: /eoancillarydata/BRDF/CSIRO_mosaic
 
   LS5 CPF:

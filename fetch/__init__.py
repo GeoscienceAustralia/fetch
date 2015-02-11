@@ -271,7 +271,7 @@ def fetch_file(uri,
             prefix='.fetch-'
         )
 
-        _log.debug('Running fetch for file %r', t)
+        _log.debug('Running fetch for file %r', uri)
         fetch_fn(t)
         _log.debug('Fetch complete')
 

@@ -19,7 +19,11 @@ _log = logging.getLogger(__name__)
 
 class SimpleObject(object):
     """
-    An object with direct mapping between constructor arguments and properties.
+    An object with matching constructor arguments and properties.
+
+    Implements repr and eq methods that print/compare all properties.
+
+    Beware of cyclic dependencies in properties
     """
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)

@@ -31,7 +31,7 @@ def filename_from_url(url):
 
 class HttpPostAction(SimpleObject):
     """
-    Perform a simple HTTP-Post. Intended for use as a pre-action.
+    Perform a simple HTTP-Post. Intended for use as a 'beforehand' action.
 
     (such as posting login credentials before retrievals)
     """

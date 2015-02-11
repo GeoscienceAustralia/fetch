@@ -305,7 +305,7 @@ def _make_config():
             'BRDF from NCI': {
                 'schedule': '0 9 * * 6',
                 'source': RsyncMirrorSource(
-                    source_path='/g/data1/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*',
+                    source_path='/g/data/u39/public/data/modis/lpdaac-mosaics-cmar/v1-hdf4/aust/MCD43A1.005/*',
                     source_host='lpgs@r-dm.nci.org.au',
                     target_path=anc_data + '/BRDF/CSIRO_mosaic',
                 )

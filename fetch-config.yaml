@@ -18,6 +18,12 @@ messaging:
   username: fetch
   password: fetch
 
+# Logging level for modules (any python module can be added here)
+log:
+  fetch: DEBUG
+  neocommon: DEBUG
+  neocommon.files: INFO
+
 # Download rules:
 rules:
   BRDF from NCI:

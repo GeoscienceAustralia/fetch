@@ -230,6 +230,18 @@ class DateFilenameTransform(FilenameTransform):
         )
 
 
+def mkdirs(target_dir):
+    """
+    Create directory and all parents. Don't complain if exists.
+    """
+    try:
+        os.makedirs(target_dir)
+    except OSError, e:
+        # be happy if someone already created the path
+        if e.errno != errno.EEXIST:
+            raise
+
+
 def fetch_file(uri,
                fetch_fn,
                reporter,
@@ -260,7 +272,7 @@ def fetch_file(uri,
 
     if not os.path.exists(target_dir):
         _log.info('Creating dir %r', target_dir)
-        os.makedirs(target_dir)
+        mkdirs(target_dir)
 
     target_path = os.path.join(target_dir, target_filename)
 

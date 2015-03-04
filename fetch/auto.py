@@ -267,7 +267,7 @@ def get_day_log_dir(log_directory, time_secs):
         time.strftime('%m-%d', t)
     )
     if not os.path.exists(day_log_dir):
-        os.makedirs(day_log_dir)
+        mkdirs(day_log_dir)
 
     return day_log_dir
 
@@ -381,12 +381,12 @@ class RunConfig(object):
             self.lock_directory = os.path.join(self.base_directory, 'lock')
             _log.info('Using lock directory %s', self.lock_directory)
             if not os.path.exists(self.lock_directory):
-                os.makedirs(self.lock_directory)
+                mkdirs(self.lock_directory)
 
         self.log_directory = os.path.join(self.base_directory, 'log')
         _log.info('Using log directory %s', self.log_directory)
         if not os.path.exists(self.log_directory):
-            os.makedirs(self.log_directory)
+            mkdirs(self.log_directory)
 
         if config.log_levels != self.log_levels:
             _set_logging_levels(config.log_levels)

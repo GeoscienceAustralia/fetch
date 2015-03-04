@@ -23,7 +23,7 @@ from neocommon import message, Uri
 import arrow
 from croniter import croniter
 
-from . import ResultHandler, TaskFailureEmailer, RemoteFetchException, load
+from . import ResultHandler, TaskFailureEmailer, RemoteFetchException, load, mkdirs
 
 
 _log = logging.getLogger(__name__)

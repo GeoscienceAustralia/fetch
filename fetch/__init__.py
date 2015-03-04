@@ -13,6 +13,7 @@ import re
 import logging
 import tempfile
 from email.mime.text import MIMEText
+import errno
 
 _log = logging.getLogger(__name__)
 

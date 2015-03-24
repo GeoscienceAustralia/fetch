@@ -2,7 +2,7 @@
 # (In YAML format https://en.wikipedia.org/wiki/YAML )
 
 # An explanation of most of these options is available in the file README.md
-#  -> Viewable here: http://rhe-neo-dev-repo.dev.lan/git/blob/pma!on-receipt.git/mkII/onreceipt!fetch!README.md
+#  -> Viewable here: http://rhe-neo-dev-repo.dev.lan/git/blob/pma!fetch.git/master/README.md
 
 # The work directory (for log and lock files):
 directory: /data/fetch
@@ -11,7 +11,7 @@ directory: /data/fetch
 notify:
   email: ['jeremy.hooke@ga.gov.au']
 
-# Message bus config, for announcing arrivals.
+# Message bus config, for announcing arrivals. Optional.
 messaging:
   host: rhe-neo-dev01.dev.lan
   # virtual_host:

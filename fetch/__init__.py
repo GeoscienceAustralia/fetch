@@ -278,12 +278,12 @@ def fetch_file(uri,
     target_path = os.path.join(target_dir, target_filename)
 
 
-    #((FEI deal with target_filename = "Products/Contact_Schedules/L72015056ASNSCH.S00"
-    target_dir2=os.path.dirname(target_path)
+    #FEI deal with target_filename = "Products/Contact_Schedules/L72015056ASNSCH.S00"
+    target_dir2 = os.path.dirname(target_path)
     if not os.path.exists(target_dir2):
-        _log.debug("creating target_dir2= %r",target_dir2)
+        _log.debug("creating target_dir2= %r", target_dir2)
         mkdirs(target_dir2)
-    #FEI))
+    #FEI
 
     if os.path.exists(target_path) and not override_existing:
         _log.debug('Path exists %r. Skipping', target_path)

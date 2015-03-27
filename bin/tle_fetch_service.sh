@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
+# make sure this file is executable chmod u+x
 
-# Commandline Usage:   nohup bin/fetch-service tle_rules.yaml &>> ~/logs/fetch/service.log &
-
+# Commandline Usage:
+#   nohup bin/tle_fetch_service.sh tle_rules.yaml &>> ~/logs/fetch/service3.log &
 
 # Load such environment vars if present (eg. proxy settings):
 # [ -e /etc/neo-env.sh ] && . /etc/neo-env.sh
 
-# production server proxy setting must be enabled
+# Below is the production server proxy setting. must be enabled
 export ftp_proxy=http://10.7.64.209:8080
 export http_proxy=http://10.7.64.209:8080
 export https_proxy=http://10.7.64.209:8080
@@ -28,7 +29,7 @@ export LD_LIBRARY_PATH="$PY27_INST_DIR/lib:$LD_LIBRARY_PATH"
 PYTHON27EXE=$PY27_INST_DIR/bin/python2.7
 exec $PYTHON27EXE -m fetch "$@"
 
-######################## PRODUCTION NOTE   ##########################################
+######################## PRODUCTION USAGE  ##########################################
 #For more persistent running of this daemon in a production server, install a file into /etc/init/
 #For Example:  [ads@pe-test fetch]$ cat /etc/init/fetch-service.conf
 # with the following content:

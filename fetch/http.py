@@ -236,6 +236,7 @@ class HttpListingSource(_HttpBaseSource):
                 reporter,
                 source_url,
                 session=session
+                #,override_existing=True
             )
 
 
@@ -275,7 +276,19 @@ class RssSource(_HttpBaseSource):
                 reporter,
                 file_url,
                 session=session
+                #,override_existing=True
             )
+
+#### How to make sure download the same filename every time?
+
+#The http-listing and rss downloaders currently don’t override (redownload) existing files,
+#as that would be a large amount of files to download each time,
+# and I didn’t think the ones we were downloading changed after appearing in the feed.
+#
+# If that’s not the case, we might need smarter change detection, or you can just enable redownloading.
+
+# In the last line of fetch/http.py, in the class RssSource add the option override_existing=True to the _fetch_file() call.
+# Do the same in HttpListingSource just above it. Then it’ll download everything each time.
 
 
 

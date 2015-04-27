@@ -2,6 +2,7 @@
 Logic to load configuration.
 
 """
+from __future__ import absolute_import
 import functools
 import logging
 import os
@@ -165,7 +166,7 @@ class Config(object):
 
         rules = set()
         if 'rules' in config:
-            for name, fields in config['rules'].iteritems():
+            for name, fields in config['rules'].items():
                 item = ScheduledItem(name, fields.get('schedule'), fields.get('source'),
                                      process=fields.get('process'))
                 rules.add(item)
@@ -218,7 +219,7 @@ def _remove_nones(dict_):
     >>> _remove_nones({})
     {}
     """
-    return {k: v for k, v in dict_.iteritems() if v is not None}
+    return {k: v for k, v in dict_.items() if v is not None}
 
 
 def _load_config_dict(file_io):

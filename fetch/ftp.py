@@ -1,6 +1,7 @@
 """
 FTP-based retrieval of files.
 """
+from __future__ import absolute_import
 import ftplib
 import logging
 import os

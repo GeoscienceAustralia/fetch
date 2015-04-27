@@ -2,6 +2,7 @@
 Automatically download ancillary, given
 a YAML config file. See the auto module.
 """
+from __future__ import absolute_import
 
 import logging
 import sys

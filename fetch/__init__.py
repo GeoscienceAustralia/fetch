@@ -1,6 +1,7 @@
 """
 A package for automatically fetching files (eg. Ancillary).
 """
+from __future__ import absolute_import
 import datetime
 import multiprocessing
 import smtplib
@@ -14,6 +15,7 @@ import logging
 import tempfile
 from email.mime.text import MIMEText
 import errno
+
 
 _log = logging.getLogger(__name__)
 
@@ -237,7 +239,7 @@ def mkdirs(target_dir):
     """
     try:
         os.makedirs(target_dir)
-    except OSError, e:
+    except OSError as e:
         # be happy if someone already created the path
         if e.errno != errno.EEXIST:
             raise
@@ -422,7 +424,7 @@ class DateRangeSource(DataSource):
                 'julday': day.strftime('%j')
             }
 
-            for name, pattern in self.overridden_properties.iteritems():
+            for name, pattern in self.overridden_properties.items():
                 value = pattern.format(**date_params)
                 _log.debug('Setting %r=%r', name, value)
                 setattr(self.using, name, value)

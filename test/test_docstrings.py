@@ -1,4 +1,4 @@
-__author__ = 'u63606'
+from __future__ import absolute_import
 
 import doctest
 import fetch

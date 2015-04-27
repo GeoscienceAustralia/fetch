@@ -7,7 +7,7 @@ and destination locations to download to.
 This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import fcntl
 import logging
 import os
@@ -599,7 +599,7 @@ def _set_logging_levels(levels):
     >>> logging.getLogger('fetch.test.some_module').getEffectiveLevel() == logging.WARN
     True
     """
-    for name, level in levels.iteritems():
+    for name, level in levels.items():
         lg = logging.getLogger(name)
         lg.setLevel(getattr(logging, level.upper()))
         _log.info('Set log level %s to %s', name, level)

@@ -24,7 +24,7 @@ def filename_from_url(url):
     >>> filename_from_url('http://example.com/somefile.zip')
     'somefile.zip'
     >>> filename_from_url('http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat')
-    'urcpole.dat'
+    'utcpole.dat'
     """
     return url.split('/')[-1]
 

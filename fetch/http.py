@@ -213,7 +213,10 @@ class HttpListingSource(_HttpBaseSource):
                 '{url}\n\n{body}'.format(url=url, body=res.text)
             )
 
+        # pylint fails to identify native functions under our virtualenv...
+        #: pylint: disable=no-member
         page = etree.fromstring(res.text, parser=etree.HTMLParser())
+
         url = res.url
 
         anchors = page.xpath('//a')

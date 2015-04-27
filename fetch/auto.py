@@ -17,11 +17,15 @@ import heapq
 import time
 import multiprocessing
 import signal
-from setproctitle import setproctitle
+
 from neocommon import message, Uri
 
 import arrow
 from croniter import croniter
+
+# pylint fails to identify native functions under our virtualenv...
+#: pylint: disable=no-name-in-module
+from setproctitle import setproctitle
 
 from . import ResultHandler, TaskFailureEmailer, RemoteFetchException, load, mkdirs
 

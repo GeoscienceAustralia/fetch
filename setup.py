@@ -18,7 +18,7 @@ setup(name='fetch',
           'fetch',
       ],
       scripts=[
-          'bin/fetch-service','bin/fetch-service-tle',
+          'bin/fetch-service', 'bin/fetch-service-tle',
           'bin/post-fetch-proc.sh',
       ],
       requires=[

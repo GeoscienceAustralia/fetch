@@ -41,7 +41,7 @@ load-plugins=
 
 # trailing-whitespace is due to a dos line-endings bug. This is fixed in the next version of
 # pylint
-disable=bare-except,no-self-use,unused-argument,duplicate-code,trailing-whitespace,abstract-class-little-used,star-args
+disable=bare-except,no-self-use,unused-argument,duplicate-code,trailing-whitespace,abstract-class-little-used,star-args,locally-disabled
 
 
 [REPORTS]

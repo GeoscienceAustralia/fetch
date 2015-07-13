@@ -273,23 +273,18 @@ def fetch_file(uri,
         )
         target_filename = filename_transform.transform_filename(target_filename)
 
-    if not os.path.exists(target_dir):
-        _log.info('Creating dir %r', target_dir)
-        mkdirs(target_dir)
-
     target_path = os.path.join(target_dir, target_filename)
-
-
-    #FEI deal with target_filename = "Products/Contact_Schedules/L72015056ASNSCH.S00"
-    target_dir2 = os.path.dirname(target_path)
-    if not os.path.exists(target_dir2):
-        _log.debug("creating target_dir2= %r", target_dir2)
-        mkdirs(target_dir2)
-    #FEI
 
     if os.path.exists(target_path) and not override_existing:
         _log.debug('Path exists %r. Skipping', target_path)
         return
+
+    # Create directories if needed.
+    # (We can't use 'target_dir', because the 'filename' can contain folder offsets too.)
+    actual_target_dir = os.path.dirname(target_path)
+    if not os.path.exists(actual_target_dir):
+        _log.info('Creating dir %r', actual_target_dir)
+        mkdirs(actual_target_dir)
 
     t = None
     try:

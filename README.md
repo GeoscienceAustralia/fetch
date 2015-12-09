@@ -232,3 +232,14 @@ Both fields are evaluated with [python string formatting](https://docs.python.or
     # Directory ('/data/fetch/eoancil-test/water_vapour/source')
     {parent_dir}
 
+## Signals:
+
+Send a `SIGHUP` signal to reload the config file without interrupting existing downloads:
+
+    kill -1 <pid>
+
+Send a `SIGINT` or `SIGTERM` signal to start a graceful shutdown (any active
+downloads will be completed before exiting).
+
+    kill <pid>
+

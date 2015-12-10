@@ -1,51 +1,60 @@
 from __future__ import print_function, absolute_import
 
 import tempfile
-import unittest
 
+import pytest
 from pathlib import Path
 
 from fetch import load
-from neocommon import files
+
+with_neocommon = pytest.mark.with_neocommon
 
 
-class TestLoad(unittest.TestCase):
-    def _fail_with_diff(self, reparsed_config, source_config):
-        print('-' * 20)
-        print_simple_obj_diff(source_config, reparsed_config)
-        print('-' * 20)
-        self.assertTrue(False, msg='Reparsed config not equal: see print output above.')
+def _fail_with_diff(reparsed_config, source_config):
+    print('-' * 20)
+    print_simple_obj_diff(source_config, reparsed_config)
+    print('-' * 20)
+    assert False, 'Reparsed config not equal: see print output.'
 
-    def test_dump_load_dict(self):
-        source_config = _make_config()
 
-        raw_yaml = load._dump_config_dict(source_config)
+def test_dump_load_dict():
+    source_config = _make_config()
 
-        reparsed_config = load._load_config_dict(raw_yaml)
+    raw_yaml = load._dump_config_dict(source_config)
 
-        if source_config != reparsed_config:
-            self._fail_with_diff(reparsed_config, source_config)
+    reparsed_config = load._load_config_dict(raw_yaml)
 
-    def _check_load_dump_config(self, make_config):
-        original_config = load.Config.from_dict(make_config())
-        config_file_path = Path(files.temp_dir(tempfile.tempdir, prefix='testrun'), 'config.yaml')
-        with config_file_path.open(mode='w') as f:
-            yaml = load.dump_yaml(original_config)
-            f.write(unicode(yaml))
-        reparsed_config = load.load_yaml(str(config_file_path))
-        if make_config() != reparsed_config.to_dict():
-            self._fail_with_diff(make_config(), reparsed_config.to_dict())
+    if source_config != reparsed_config:
+        _fail_with_diff(reparsed_config, source_config)
 
-    def test_dump_load_obj_full(self):
-        self._check_load_dump_config(_make_config)
 
-    def test_dump_load_obj_no_messaing(self):
-        def make_config_no_messaging():
-            c = _make_config()
-            del c['messaging']
-            return c
+def _check_load_dump_config(make_config):
+    original_config = load.Config.from_dict(make_config())
+    config_file_path = Path(tempfile.mkdtemp(prefix='testrun'), 'config.yaml')
+    with config_file_path.open(mode='w') as f:
+        yaml = load.dump_yaml(original_config)
+        f.write(unicode(yaml))
+    reparsed_config = load.load_yaml(str(config_file_path))
+    if make_config() != reparsed_config.to_dict():
+        _fail_with_diff(make_config(), reparsed_config.to_dict())
 
-        self._check_load_dump_config(make_config_no_messaging)
+
+def test_dump_load_obj_full():
+    _check_load_dump_config(_make_config)
+
+
+@with_neocommon
+def test_dump_load_obj_with_messaing():
+    def make_config_no_messaging():
+        c = _make_config()
+        c['messaging'] = {
+            'host': 'rhe-pma-test08.test.lan',
+            'username': 'fetch',
+            'password': 'fetch'
+        }
+        return c
+
+    _check_load_dump_config(make_config_no_messaging)
 
 
 def print_simple_obj_diff(dict1, dict2):
@@ -96,20 +105,16 @@ def _make_config():
     """
     Load a config dict (this is our old schedule)
     """
-    from fetch import http, ftp, RegexpOutputPathTransform, \
+    from fetch._core import RegexpOutputPathTransform, \
         DateRangeSource, DateFilenameTransform, \
         RsyncMirrorSource, ShellFileProcessor
+    from fetch import http, ftp
     # Dump / Load / Dump to test our routines.
     anc_data = '/tmp/anc'
     schedule = {
         'directory': '/tmp/anc-fetch',
         'notify': {
             'email': ['jeremy.hooke@ga.gov.au']
-        },
-        'messaging': {
-            'host': 'rhe-pma-test08.test.lan',
-            'username': 'fetch',
-            'password': 'fetch'
         },
         'log': {
             'fetch': 'DEBUG'

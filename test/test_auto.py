@@ -1,7 +1,6 @@
 from __future__ import absolute_import
-import unittest
 
-__author__ = 'u63606'
+import unittest
 
 from fetch.auto import _filter_finished_children
 
@@ -31,5 +30,3 @@ class TestAuto(unittest.TestCase):
             set([running_proc]),
             _filter_finished_children([running_proc, failed_proc, succeeded_proc], [])
         )
-
-

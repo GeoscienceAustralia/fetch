@@ -8,27 +8,24 @@ This is intended to replace Operations maintenance of many diverse and
 complicated scripts with a single, central configuration file.
 """
 from __future__ import print_function, absolute_import
+
 import fcntl
+import heapq
 import logging
+import multiprocessing
 import os
+import signal
 import stat
 import sys
-import heapq
 import time
-import multiprocessing
-import signal
-
-from neocommon import message, Uri
+from setproctitle import setproctitle
 
 import arrow
 from croniter import croniter
 
-# pylint fails to identify native functions under our virtualenv...
-#: pylint: disable=no-name-in-module
-from setproctitle import setproctitle
-
-from . import ResultHandler, TaskFailureEmailer, RemoteFetchException, load, mkdirs
-
+from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
+from .util import Uri
+from . import load
 
 _log = logging.getLogger(__name__)
 
@@ -101,7 +98,7 @@ class ScheduledProcess(multiprocessing.Process):
         :type log_directory: str
         :type lock_directory: str
 
-        >>> from . import EmptySource
+        >>> from ._core import EmptySource
         >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', EmptySource())
         >>> scheduled_time = 1416285412.541422
         >>> s = ScheduledProcess(None, item, scheduled_time, '/tmp/test-log', '/tmp/test-lock')
@@ -156,6 +153,7 @@ class ScheduledProcess(multiprocessing.Process):
                 :type item: ScheduledItem
                 :type reporter: fetch.ResultHandler
                 """
+
                 def __init__(self, item, scheduled_time, reporter):
                     self.item = item
                     self.reporter = reporter
@@ -396,16 +394,6 @@ class RunConfig(object):
             _set_logging_levels(config.log_levels)
             self.log_levels = config.log_levels
 
-    def message_config(self):
-        """
-        Get a messaging connection configured with our settings.
-
-        (For use with neocommon.message.NeoMessenger)
-
-        :rtype message.MessengerConnection
-        """
-        return message.MessengerConnection(**self.messaging_settings)
-
 
 class NotifyResultHandler(ResultHandler):
     """
@@ -435,8 +423,11 @@ class NotifyResultHandler(ResultHandler):
 
         _log.info('Completed %r -> %r', source_uri, paths)
         if self.config.messaging_settings:
+            # Optional library.
+            #: pylint: disable=import-error
+            from neocommon import message
             uris = [Uri.parse(path) for path in paths]
-            with message.NeoMessenger(self.config.message_config()) as msg:
+            with message.NeoMessenger(message.MessengerConnection(**self.config.messaging_settings)) as msg:
                 msg.announce_ancillary(
                     message.AncillaryUpdate(
                         ancillary_type=self.job_id,
@@ -608,5 +599,3 @@ def _set_logging_levels(levels):
 _LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
 _LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _LOG_HANDLER.setFormatter(_LOG_FORMATTER)
-
-

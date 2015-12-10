@@ -1,6 +1,6 @@
 #!/usr/bin/env python2.7
 from __future__ import print_function
-from distutils.core import setup
+from setuptools import setup
 import os
 
 version = '1.1.4b'
@@ -21,12 +21,11 @@ setup(name='fetch',
           'bin/fetch-service', 'bin/fetch-service-tle',
           'bin/post-fetch-proc.sh',
       ],
-      requires=[
+      install_requires=[
           'arrow',
           'croniter',
           'feedparser',
           'lxml',
-          'neocommon',
           'pathlib',
           'pyyaml',
           'requests',

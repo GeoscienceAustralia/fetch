@@ -3,19 +3,19 @@ Logic to load configuration.
 
 """
 from __future__ import absolute_import
+
 import functools
+import inspect
 import logging
 import os
-import inspect
 
-from croniter import croniter
 import yaml
 import yaml.resolver
+from croniter import croniter
 
-from . import http, ftp, RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
+from . import ftp, http
+from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
-from neocommon.message import MessengerConnection
-
 
 _log = logging.getLogger(__name__)
 
@@ -140,6 +140,9 @@ class Config(object):
         self.notify_addresses = notify_addresses
 
         if messaging_settings:
+            # Optional library.
+            #: pylint: disable=import-error
+            from neocommon.message import MessengerConnection
             verify_can_construct(MessengerConnection, messaging_settings, identifier='messaging settings')
 
         self.messaging_settings = messaging_settings
@@ -372,4 +375,3 @@ def _init_yaml_handling():
 
 
 _init_yaml_handling()
-

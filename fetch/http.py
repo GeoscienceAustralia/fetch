@@ -3,17 +3,16 @@ HTTP-based download of files.
 """
 from __future__ import absolute_import
 
-import re
-import requests
 import logging
+import re
 from contextlib import closing
-import feedparser
-from lxml import etree
 from urlparse import urljoin
 
-from . import DataSource, fetch_file, RemoteFetchException
-from fetch import SimpleObject
+import feedparser
+import requests
+from lxml import etree
 
+from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ class HttpPostAction(SimpleObject):
 
     (such as posting login credentials before retrievals)
     """
+
     def __init__(self, url, params):
         """
         :type url: str
@@ -57,6 +57,7 @@ class _HttpBaseSource(DataSource):
     """
     Base class for HTTP retrievals.
     """
+
     def __init__(self, target_dir, url=None, urls=None, filename_transform=None, beforehand=None):
         """
         :type urls: list of str
@@ -240,7 +241,7 @@ class HttpListingSource(_HttpBaseSource):
                 reporter,
                 source_url,
                 session=session
-                #,override_existing=True
+                # ,override_existing=True
             )
 
 
@@ -280,19 +281,5 @@ class RssSource(_HttpBaseSource):
                 reporter,
                 file_url,
                 session=session
-                #,override_existing=True
+                # ,override_existing=True
             )
-
-#### How to make sure download the same filename every time?
-
-#The http-listing and rss downloaders currently do not override (redownload) existing files,
-#as that would be a large amount of files to download each time,
-# and I did not think the ones we were downloading changed after appearing in the feed.
-#
-# If that is not the case, we might need smarter change detection, or you can just enable re-downloading.
-
-# In the last line of fetch/http.py, in the class RssSource add the option override_existing=True to the _fetch_file().
-# Do the same in HttpListingSource just above it. Then it will download everything each time.
-
-
-

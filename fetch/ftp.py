@@ -2,12 +2,13 @@
 FTP-based retrieval of files.
 """
 from __future__ import absolute_import
+
 import ftplib
 import logging
 import os
 import re
 
-from . import DataSource, fetch_file, RemoteFetchException
+from ._core import DataSource, fetch_file, RemoteFetchException
 
 _log = logging.getLogger(__name__)
 DEFAULT_SOCKET_TIMEOUT_SECS = 60 * 5.0
@@ -159,7 +160,7 @@ class FtpListingSource(DataSource):
             files = [
                 os.path.join(self.source_dir, f)
                 for f in files if re.match(self.name_pattern, os.path.basename(f))
-            ]
+                ]
             _log.debug('Filtered list of length %r', len(files))
             return files
 
@@ -170,4 +171,3 @@ class FtpListingSource(DataSource):
             get_files,
             override_existing=True
         )
-

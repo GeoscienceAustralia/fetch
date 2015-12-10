@@ -1,4 +1,4 @@
-# Ancillary fetch daemon
+# Ancillary fetch daemon [![Build Status](https://travis-ci.org/GeoscienceAustralia/fetch.svg?branch=develop)](https://travis-ci.org/GeoscienceAustralia/fetch)
 
 Download ancillary data automatically.
 

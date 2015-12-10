@@ -17,10 +17,6 @@ setup(name='fetch',
       packages=[
           'fetch',
       ],
-      scripts=[
-          'bin/fetch-service', 'bin/fetch-service-tle',
-          'bin/post-fetch-proc.sh',
-      ],
       install_requires=[
           'arrow',
           'croniter',

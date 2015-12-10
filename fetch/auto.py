@@ -90,7 +90,7 @@ class ScheduledProcess(multiprocessing.Process):
     A subprocess to run a module.
     """
 
-    def __init__(self, reporter, item, scheduled_time, log_directory, lock_directory):
+    def __init__(self, reporter, item, scheduled_time, log_directory, lock_directory, epoch_to_time=time.localtime):
         """
         :type reporter: fetch.ResultHandler
         :type item: fetch.load.ScheduledItem
@@ -100,10 +100,12 @@ class ScheduledProcess(multiprocessing.Process):
 
         >>> from ._core import EmptySource
         >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', EmptySource())
+        >>> # 04:36 UTC time
         >>> scheduled_time = 1416285412.541422
-        >>> s = ScheduledProcess(None, item, scheduled_time, '/tmp/test-log', '/tmp/test-lock')
+        >>> log, lock = '/tmp/test-log', '/tmp/test-lock'
+        >>> s = ScheduledProcess(None, item, scheduled_time, log, lock, epoch_to_time=time.gmtime)
         >>> (s.name, s.log_file, s.lock_file)
-        ('fetch-1536-ls7-cpf', '/tmp/test-log/1536-ls7-cpf.log', '/tmp/test-lock/ls7-cpf.lck')
+        ('fetch-0436-ls7-cpf', '/tmp/test-log/0436-ls7-cpf.log', '/tmp/test-lock/ls7-cpf.lck')
         """
         super(ScheduledProcess, self).__init__()
         id_ = item.sanitized_name
@@ -111,7 +113,7 @@ class ScheduledProcess(multiprocessing.Process):
             lock_directory,
             '{id}.lck'.format(id=id_)
         )
-        scheduled_time_st = time.strftime('%H%M', time.localtime(scheduled_time))
+        scheduled_time_st = time.strftime('%H%M', epoch_to_time(scheduled_time))
         log_file = os.path.join(
             log_directory,
             '{time}-{id}.log'.format(

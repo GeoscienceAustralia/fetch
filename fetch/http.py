@@ -226,6 +226,9 @@ class HttpListingSource(_HttpBaseSource):
         for anchor in anchors:
             # : :type: str
             name = anchor.text
+            if 'href' not in anchor.attrib:
+                continue
+
             source_url = urljoin(url, anchor.attrib['href'])
 
             if not anchor.attrib['href'].endswith(name):

@@ -18,7 +18,12 @@ import signal
 import stat
 import sys
 import time
-from setproctitle import setproctitle
+
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    # On non-support platforms we won't bother setting the process name.
+    setproctitle = lambda title: None
 
 import arrow
 from croniter import croniter

@@ -287,7 +287,7 @@ def _on_shutdown(running_children, notifiers):
     """
     # Shut down -- Join all children.
     all_children = running_children.union(multiprocessing.active_children())
-    _log.info('Shutting down. Joining %r children', len(all_children))
+    _log.info('Waiting on %r children', len(all_children))
     for p in all_children:
         p.join()
         _on_child_finish(p, notifiers)
@@ -479,8 +479,14 @@ class NotifyResultHandler(ResultHandler):
 
 def logging_init():
     """
-    Add logging handlers
+    Add logging handler and set default levels.
     """
+    # Default logging levels. These can be overridden when the config file is loaded.
+    logging.getLogger().setLevel(logging.WARNING)
+    logging.getLogger('neocommon').setLevel(logging.INFO)
+    logging.getLogger('fetch').setLevel(logging.INFO)
+
+    # Add logging handlers
     logging.getLogger().addHandler(_LOG_HANDLER)
 
 
@@ -554,7 +560,49 @@ def run_loop(o):
                 sleep_seconds
             )
             time.sleep(sleep_seconds)
+    _log.info('Shutting down.')
+    _on_shutdown(running_children, o.notifiers)
 
+
+def run_items(o, *item_names):
+    """
+    Run the given items from the config right now.
+
+    :type o: RunConfig
+    :type item_names: list[str]
+    :param item_names: Names of items from the config to run once.
+    """
+    _log.info('Triggering items %r', item_names)
+    # Find all chosen items.
+    chosen_items = [item for scheduled_time, item in o.schedule.schedule if item.name in item_names]
+    if len(chosen_items) < len(item_names):
+        found_names = set([item.name for item in chosen_items])
+        missing_names = set(item_names) - found_names
+        raise RuntimeError('No rule exists with name(s): %r' % list(missing_names))
+
+    # Scheduled now.
+    scheduled_time = time.time()
+
+    # Trigger them all.
+    # : :type: set of ScheduledProcessor
+    running_children = set()
+    for chosen_item in chosen_items:
+        p = _run_item(
+            NotifyResultHandler(o, chosen_item.sanitized_name),
+            chosen_item,
+            scheduled_time=scheduled_time,
+            # Use a unique log directory for each day
+            log_directory=get_day_log_dir(o.log_directory, scheduled_time),
+            lock_directory=o.lock_directory
+        )
+        running_children.add(p)
+        _log.debug(
+            'Created child %s for item %r',
+            p.pid,
+            chosen_item.name
+        )
+
+    # Wait for all to complete.
     _on_shutdown(running_children, o.notifiers)
 
 

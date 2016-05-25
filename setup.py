@@ -1,7 +1,9 @@
 #!/usr/bin/env python2.7
 from __future__ import print_function
-from setuptools import setup
+
 import os
+
+from setuptools import setup
 
 version = '1.1.4b'
 
@@ -16,6 +18,7 @@ setup(name='fetch',
       description='Automatic retrieval of ancillary and data',
       packages=[
           'fetch',
+          'fetch.scripts'
       ],
       install_requires=[
           'arrow',
@@ -26,5 +29,11 @@ setup(name='fetch',
           'pyyaml',
           'requests',
           'setproctitle',
-      ]
-)
+      ],
+      entry_points={
+          'console_scripts': [
+              'fetch-service = fetch.scripts.service:main'
+              'fetch-once = fetch.scripts.once:main'
+          ]
+      },
+      )

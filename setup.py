@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import os
+import sys
 
 from setuptools import setup
 
@@ -21,18 +22,20 @@ setup(name='fetch',
           'fetch.scripts'
       ],
       install_requires=[
-          'arrow',
-          'croniter',
-          'feedparser',
-          'lxml',
-          'pathlib',
-          'pyyaml',
-          'requests',
-          'setproctitle',
-      ],
+                           'arrow',
+                           'croniter',
+                           'feedparser',
+                           'lxml',
+                           'pathlib',
+                           'pyyaml',
+                           'requests',
+                       ] + (
+                           # Setting subprocess names is only support on Linux
+                           ['setproctitle'] if 'linux' in sys.platform else []
+                       ),
       entry_points={
           'console_scripts': [
-              'fetch-service = fetch.scripts.service:main'
+              'fetch-service = fetch.scripts.service:main',
               'fetch-once = fetch.scripts.once:main'
           ]
       },

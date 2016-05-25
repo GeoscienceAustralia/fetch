@@ -127,7 +127,7 @@ class Config(object):
     def __init__(self, directory, rules, notify_addresses, messaging_settings=None, log_levels=None):
         """
         :type directory: str
-        :type rules: set of ScheduledItem
+        :type rules: list of ScheduledItem
         """
         super(Config, self).__init__()
         self.directory = directory
@@ -167,12 +167,12 @@ class Config(object):
             if 'email' in notify_config:
                 notify_email_addresses = notify_config['email']
 
-        rules = set()
+        rules = []
         if 'rules' in config:
             for name, fields in config['rules'].items():
                 item = ScheduledItem(name, fields.get('schedule'), fields.get('source'),
                                      process=fields.get('process'))
-                rules.add(item)
+                rules.append(item)
 
         return Config(
             directory,

@@ -215,10 +215,10 @@ def _remove_nones(dict_):
     :type dict_: dict
     :rtype dict
 
-    >>> _remove_nones({'a': 4, 'b': None})
+    >>> _remove_nones({'a': 4, 'b': None, 'c': None})
     {'a': 4}
-    >>> _remove_nones({'a': 'a', 'b': 0})
-    {'a': 'a', 'b': 0}
+    >>> sorted(_remove_nones({'a': 'a', 'b': 0}).items())
+    [('a', 'a'), ('b', 0)]
     >>> _remove_nones({})
     {}
     """

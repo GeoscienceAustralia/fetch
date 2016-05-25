@@ -150,7 +150,7 @@ class Uri(object):
         ''
         >>> Uri.parse('something.txt').get_hostname()
         Traceback (most recent call last):
-          ...
+        ...
         UnsupportedUriError: File paths must be absolute paths (start with /). Received: 'something.txt'
         """
         if self.scheme == 'file':
@@ -184,8 +184,8 @@ class Uri(object):
 
         >>> Uri.parse('eods:?rid=123').get_query()
         {'rid': '123'}
-        >>> Uri.parse('http://pma-dev/job?status=PENDING&parent=123').get_query()
-        {'status': 'PENDING', 'parent': '123'}
+        >>> sorted(Uri.parse('http://pma-dev/job?status=PENDING&parent=123').get_query().items())
+        [('parent', '123'), ('status', 'PENDING')]
         >>> Uri.parse('file:///something.txt').get_query()
         {}
 

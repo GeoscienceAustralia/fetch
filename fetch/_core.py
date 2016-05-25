@@ -215,6 +215,9 @@ class DateFilenameTransform(FilenameTransform):
         >>> d.format_ = '{filename}'
         >>> d.transform_filename('output.log')
         'output.log'
+        >>> d.format_ = '{path.stem}-{date:%Y-%m}{path.suffix}'
+        >>> d.transform_filename('output.log')
+        'output-2013-08.log'
         """
         super(DateFilenameTransform, self).__init__()
         self.format_ = format_
@@ -226,10 +229,13 @@ class DateFilenameTransform(FilenameTransform):
         """
         day = self.fixed_date if self.fixed_date else datetime.datetime.utcnow()
         date_params = {
+            'path': Path(source_filename),
+            'date': day,
+            # Specifics are sometimes clearer. The above are more flexible.
             'year': day.strftime('%Y'),
             'month': day.strftime('%m'),
             'day': day.strftime('%d'),
-            'julday': day.strftime('%j')
+            'julday': day.strftime('%j'),
         }
         return self.format_.format(
             filename=source_filename,
@@ -422,7 +428,9 @@ class DateRangeSource(DataSource):
                 'year': day.strftime('%Y'),
                 'month': day.strftime('%m'),
                 'day': day.strftime('%d'),
-                'julday': day.strftime('%j')
+                'julday': day.strftime('%j'),
+                # More flexible: can use any date formats.
+                'date': day
             }
 
             for name, pattern in self.overridden_properties.items():
@@ -576,7 +584,10 @@ class ShellFileProcessor(FileProcessor):
             file_stem=path.stem,
             # Parent (directory)
             parent_dir=str(path.parent),
-            parent_dirs=[str(p) for p in path.parents]
+            parent_dirs=[str(p) for p in path.parents],
+
+            # A more flexible alternative to the above.
+            path=path
         )
 
     def process(self, file_path):

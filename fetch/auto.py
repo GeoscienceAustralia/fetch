@@ -19,18 +19,13 @@ import stat
 import sys
 import time
 
-try:
-    from setproctitle import setproctitle
-except ImportError:
-    # On non-support platforms we won't bother setting the process name.
-    setproctitle = lambda title: None
-
 import arrow
 from croniter import croniter
 
 from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
 from .util import Uri
 from . import load
+from .compat import setproctitle
 
 _log = logging.getLogger(__name__)
 

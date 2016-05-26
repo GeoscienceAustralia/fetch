@@ -6,13 +6,13 @@ from __future__ import absolute_import
 import logging
 import re
 from contextlib import closing
-from urlparse import urljoin
 
 import feedparser
 import requests
 from lxml import etree
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
+from .compat import urljoin
 
 _log = logging.getLogger(__name__)
 

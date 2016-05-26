@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
 """
+Console scripts for running fetch.
 """
-
-import logging
-
-_LOG = logging.getLogger(__name__)
-

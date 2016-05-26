@@ -36,7 +36,7 @@ setup(name='fetch',
       entry_points={
           'console_scripts': [
               'fetch-service = fetch.scripts.service:main',
-              'fetch-once = fetch.scripts.once:main'
+              'fetch-now = fetch.scripts.now:main'
           ]
       },
       )

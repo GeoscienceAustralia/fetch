@@ -2,9 +2,35 @@
 
 Download ancillary data automatically.
 
-It is run with one argument: a config file location
+It is run with one argument: a config file location. This will run endlessly,
+downloading according to schedules in the config file:
 
-    python -m fetch config.yaml
+    fetch-service config.yaml
+
+(and is typically run from an init script)
+
+Additionally, you can run a single rule from the config file, ignoring any
+schedules. It will run the rule once immediately and exit:
+
+    fetch-once config.yaml LS7_CPF
+
+Fetch uses file locks in its work directory to ensure that only one instance of each rule is running at a time. You
+can safely use `fetch-once` while a service is running without risking multiple instances
+interfering.
+
+### Development
+
+If not installed to the system, such as during development, they can
+alternatively be run directly from modules:
+
+Service:
+
+    python -m fetch.scripts.service config.yaml
+
+Now:
+
+    python -m fetch.scripts.now config.yaml LS7_CPF
+
 
 ## Configuration file
 

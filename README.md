@@ -12,10 +12,10 @@ downloading according to schedules in the config file:
 Additionally, you can run a single rule from the config file, ignoring any
 schedules. It will run the rule once immediately and exit:
 
-    fetch-once config.yaml LS7_CPF
+    fetch-now config.yaml LS7_CPF
 
 Fetch uses file locks in its work directory to ensure that only one instance of each rule is running at a time. You
-can safely use `fetch-once` while a service is running without risking multiple instances
+can safely use `fetch-now` while a service is running without risking multiple instances
 interfering.
 
 ### Development

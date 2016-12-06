@@ -310,7 +310,7 @@ def fetch_file(uri,
         size_bytes = os.path.getsize(t)
         if size_bytes == 0:
             _log.debug('Empty file returned for file %r', uri)
-            reporter.file_error(uri, "Empty file")
+            reporter.file_error(uri, "Empty file", "")
             return
 
         # Move to destination

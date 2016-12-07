@@ -23,7 +23,6 @@ import arrow
 from croniter import croniter
 
 from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
-from .util import Uri
 from . import load
 from .compat import setproctitle
 
@@ -427,8 +426,8 @@ class NotifyResultHandler(ResultHandler):
         if self.config.messaging_settings:
             # Optional library.
             #: pylint: disable=import-error
-            from neocommon import message
-            uris = [Uri.parse(path) for path in paths]
+            from neocommon import message, Uri as NeoUri
+            uris = [NeoUri.parse(path) for path in paths]
             with message.NeoMessenger(message.MessengerConnection(**self.config.messaging_settings)) as msg:
                 msg.announce_ancillary(
                     message.AncillaryUpdate(

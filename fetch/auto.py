@@ -572,7 +572,12 @@ def run_items(o, *item_names):
     if len(chosen_items) < len(item_names):
         found_names = set([item.name for item in chosen_items])
         missing_names = set(item_names) - found_names
-        raise RuntimeError('No rule exists with name(s): %r' % list(missing_names))
+        raise RuntimeError((
+            'No rule exists with name(s): {missing_names}\n'
+            '\nPossible Values:\n\t{possible_names}').format(
+                missing_names=", ".join(map(repr, missing_names)),
+                possible_names="\n\t".join([repr(item.name) for _, item in o.schedule.schedule])
+            ))
 
     # Scheduled now.
     scheduled_time = time.time()

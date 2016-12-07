@@ -13,9 +13,9 @@ def main():
     """
     if len(sys.argv) < 2:
         sys.stderr.writelines([
-            'Usage: fetch-once <config.yaml> [rules...]\n',
-            ''
-            'eg. fetch-once rules.yaml LS7_BPF\n'
+            'Usage: fetch-now <config.yaml> [rules...]\n',
+            '',
+            'eg. fetch-now rules.yaml LS7_BPF\n'
         ])
         sys.exit(1)
     config_location = sys.argv[1]

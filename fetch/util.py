@@ -246,6 +246,7 @@ def rsync(source_path, destination_path, source_host=None, destination_host=None
     """
 
     def format_path(host, path):
+        """Format a (possibly remote) path for rsync"""
         return '%s:%s' % (host, path) if host else path
 
     cmd = [

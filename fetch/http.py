@@ -110,6 +110,7 @@ class _HttpBaseSource(DataSource):
                     _log.debug('Error received text: %r', res.text)
 
         for url in all_urls:
+            _log.debug("Triggering %r", url)
             self.trigger_url(reporter, session, url)
 
     def trigger_url(self, reporter, session, url):

@@ -57,6 +57,7 @@ def _fetch_files(hostname,
                 _log.debug('Retrieving %r to %r', filename, t)
                 with open(t, 'wb') as f:
                     ftp.retrbinary('RETR ' + filename, f.write)
+                return True
 
             fetch_file(
                 'ftp://%s%s' % (hostname, filename),

@@ -305,14 +305,23 @@ def fetch_file(uri,
         )
 
         _log.debug('Running fetch for file %r', uri)
-        fetch_fn(t)
-        _log.debug('Fetch complete')
+        was_success = fetch_fn(t)
+        if not was_success:
+            _log.debug("Download function reported error.")
+            return
+
+        if not os.path.exists(t):
+            _log.debug('No file returned for %r', uri)
+            reporter.file_error(uri, "No file", "")
+            return
 
         size_bytes = os.path.getsize(t)
         if size_bytes == 0:
-            _log.debug('Empty file returned for file %r', uri)
+            _log.debug('Empty file returned for %r', uri)
             reporter.file_error(uri, "Empty file", "")
             return
+
+        _log.debug('Fetch complete')
 
         # Move to destination
         _log.debug('Rename %r -> %r', t, target_path)

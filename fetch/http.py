@@ -145,13 +145,14 @@ class _HttpBaseSource(DataSource):
                     body = res.text
                     _log.debug('Received text %r', res.text)
                     reporter.file_error(url, "Status code %r" % res.status_code, body)
-                    return
+                    return False
 
                 with open(t, 'wb') as f:
                     for chunk in res.iter_content(4096):
                         if chunk:
                             f.write(chunk)
                             f.flush()
+            return True
 
         fetch_file(
             url,

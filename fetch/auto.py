@@ -155,6 +155,9 @@ class ScheduledProcess(multiprocessing.Process):
                 :type reporter: fetch.ResultHandler
                 """
 
+                def file_error(self, uri, summary, body):
+                    self.reporter.file_error(uri, summary, body)
+
                 def __init__(self, item, scheduled_time, reporter):
                     self.item = item
                     self.reporter = reporter
@@ -468,7 +471,7 @@ class NotifyResultHandler(ResultHandler):
         _log.debug('Error body: %r', body)
 
         for notifier in self.config.notifiers:
-            notifier.on_file_failure(None, uri, summary, body)
+            notifier.on_file_failure(self.job_id, uri, summary, body)
 
 
 def logging_init():

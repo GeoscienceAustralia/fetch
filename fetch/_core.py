@@ -15,6 +15,7 @@ import socket
 import subprocess
 import tempfile
 from email.mime.text import MIMEText
+from email.header import Header
 
 from pathlib import Path
 
@@ -482,7 +483,7 @@ class TaskFailureEmailer(TaskFailureListener):
         :return:
         """
         self._send_mail(
-            'uri: {uri}\n{summary}\n\n{body}'.format(
+            u'uri: {uri}\n{summary}\n\n{body}'.format(
                 uri=file_uri,
                 summary=summary,
                 body=body_text
@@ -511,11 +512,11 @@ class TaskFailureEmailer(TaskFailureListener):
         :type process_name: str
         """
         hostname = socket.getfqdn()
-        msg = MIMEText(body_text)
-        msg['Subject'] = '{name} failure on {hostname}'.format(
+        msg = MIMEText(body_text.encode('utf-8'), 'plain', 'utf-8')
+        msg['Subject'] = Header(u'{name} failure on {hostname}'.format(
             name=process_name,
             hostname=hostname
-        )
+        ).encode('utf-8'), 'utf-8')
         from_address = 'fetch-{pid}@{hostname}'.format(
             pid=multiprocessing.current_process().pid,
             hostname=hostname

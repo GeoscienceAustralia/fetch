@@ -229,9 +229,15 @@ class HttpListingSource(_HttpBaseSource):
             if 'href' not in anchor.attrib:
                 continue
 
-            source_url = urljoin(url, anchor.attrib['href'])
+            href_ = anchor.attrib['href']
 
-            if not anchor.attrib['href'].endswith(name):
+            if not name:
+                _log.info("Skipping empty anchor for %r", href_)
+                continue
+
+            source_url = urljoin(url, href_)
+
+            if not href_.endswith(name):
                 _log.info('Not a filename %r, skipping.', name)
                 continue
 

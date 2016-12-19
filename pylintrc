@@ -12,7 +12,8 @@ disable=no-self-use,
     no-name-in-module,
     fixme,
     no-value-for-parameter,
-    file-ignored
+    file-ignored,
+    wrong-import-order
 
 [BASIC]
 

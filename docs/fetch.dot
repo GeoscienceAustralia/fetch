@@ -1,0 +1,50 @@
+digraph fetch {
+
+	SimpleObject [shape=box];
+	DataSource [shape=box];
+	RsyncMirrorSource [shape=box];
+	EmptySource [shape=box];
+	DateRangeSource [shape=box];
+	FtpSource [shape=box];
+	FtpListingSource [shape=box];
+	_HttpBaseSource [shape=box];
+	HttpSource [shape=box];
+	RssSource [shape=box];
+	FilenameTransform [shape=box];
+	RegexOutputPathTransform [shape=box];
+	DataFileNameTransform [shape=box];
+	ResultHandler [shape=box];
+	WrapHandler [shape=box];
+	ScheduledItem [shape=box];
+	Process [shape=box];
+	ScheduledProcess [shape=box];
+	Scheduler[shape=box];
+	Config[shape=box];
+	RunConfig[shape=box];
+	Uri[shape=box];
+	TaskFailureListener[shape=box];
+	TaskFailureEmailer[shape=box];
+	ResultHandler[shape=box];
+	NotifyResultHandler[shape=box];
+
+	SimpleObject -> DataSource;
+	DataSource -> RsyncMirrorSource;
+	DataSource -> EmptySource;
+	DataSource -> DateRangeSource;
+	DataSource -> FtpSource;
+	DataSource -> FtpListingSource;
+	DataSource -> _HttpBaseSource;
+	_HttpBaseSource -> HttpSource;
+	_HttpBaseSource -> RssSource;
+
+	SimpleObject -> FilenameTransform;
+        FilenameTransform -> RegexOutputPathTransform;
+        FilenameTransform -> DataFileNameTransform;
+
+	SimpleObject -> ScheduledItem;
+	SimpleObject -> Scheduler;
+	TaskFailureListener -> TaskFailureEmailer;
+	ResultHandler -> NotifyResultHandler;
+	ResultHandler -> WrapHandler;
+	Process -> ScheduledProcess;
+}        

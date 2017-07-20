@@ -13,7 +13,7 @@ import yaml
 import yaml.resolver
 from croniter import croniter
 
-from . import ftp, http
+from . import ftp, http, ecwmf
 from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
 
@@ -370,6 +370,7 @@ def _init_yaml_handling():
     add_default_constructor(ftp.FtpSource, '!ftp-files')
     add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
     add_default_constructor(http.HttpPostAction, '!http-post')
+    add_default_constructor(ecwmf.EcmwfApiSource, '!ecmwf-api')
     add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
     add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
 

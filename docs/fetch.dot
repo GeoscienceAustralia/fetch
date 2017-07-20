@@ -1,7 +1,10 @@
 digraph fetch {
 
+	node[shape=record,style=filled,fillcolor=gray95]
+	edge[dir=back, arrowtail=empty]
+
 	SimpleObject [shape=box];
-	DataSource [shape=box];
+	4[label="{DataSource|trigger(reporter)}"];
 	RsyncMirrorSource [shape=box];
 	EmptySource [shape=box];
 	DateRangeSource [shape=box];
@@ -13,7 +16,6 @@ digraph fetch {
 	FilenameTransform [shape=box];
 	RegexOutputPathTransform [shape=box];
 	DataFileNameTransform [shape=box];
-	ResultHandler [shape=box];
 	WrapHandler [shape=box];
 	ScheduledItem [shape=box];
 	Process [shape=box];
@@ -24,16 +26,18 @@ digraph fetch {
 	Uri[shape=box];
 	TaskFailureListener[shape=box];
 	TaskFailureEmailer[shape=box];
-	ResultHandler[shape=box];
-	NotifyResultHandler[shape=box];
+	5[label="{ResultHandler|file_error()\nfiles_complete()\nfile_complete()}"];
+	6[label="{NotifyResultHandler}"];
+	2[label="{FileProcessor|process()}"];
+	3[label="{ShellFileProcessor}"];
 
-	SimpleObject -> DataSource;
-	DataSource -> RsyncMirrorSource;
-	DataSource -> EmptySource;
-	DataSource -> DateRangeSource;
-	DataSource -> FtpSource;
-	DataSource -> FtpListingSource;
-	DataSource -> _HttpBaseSource;
+	SimpleObject -> 4;
+	4 -> RsyncMirrorSource;
+	4 -> EmptySource;
+	4 -> DateRangeSource;
+	4 -> FtpSource;
+	4 -> FtpListingSource;
+	4 -> _HttpBaseSource;
 	_HttpBaseSource -> HttpSource;
 	_HttpBaseSource -> RssSource;
 
@@ -44,7 +48,8 @@ digraph fetch {
 	SimpleObject -> ScheduledItem;
 	SimpleObject -> Scheduler;
 	TaskFailureListener -> TaskFailureEmailer;
-	ResultHandler -> NotifyResultHandler;
-	ResultHandler -> WrapHandler;
+	5 -> 6;
+	5 -> WrapHandler;
 	Process -> ScheduledProcess;
+	2 -> 3;
 }        

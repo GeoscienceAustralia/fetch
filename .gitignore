@@ -7,16 +7,18 @@ pip-log.txt
 .DS_Store
 *.egg
 *.egg-info
+build/
 
 # Unit test / coverage reports
 .coverage
 .tox
 nosetests.xml
 
-# PyCharm / IntelliJ
+# PyCharm / IntelliJ /vim
 *.iml
 .idea
 *.ipr
+*.swp
 
 # Eclipse
 .project

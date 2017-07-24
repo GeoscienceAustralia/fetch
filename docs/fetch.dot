@@ -10,12 +10,14 @@ digraph fetch {
 	DateRangeSource [shape=box];
 	FtpSource [shape=box];
 	FtpListingSource [shape=box];
-	_HttpBaseSource [shape=box];
-	HttpSource [shape=box];
-	RssSource [shape=box];
-	FilenameTransform [shape=box];
-	RegexOutputPathTransform [shape=box];
-	DataFileNameTransform [shape=box];
+	10[label="{_HttpBaseSource|__init__(target_dir, url, urls...)\ntrigger()\n_fetch_file(...)}"];
+	11[label="{HttpSource|trigger_url(reporter, seesion, url)}"];
+	12[label="{HttpListingSource|trigger_url(reporter, seesion, url)}"];
+	13[label="{RssSouce|trigger_url(reporter, seesion, url)}"];
+	14[label="{EcmwfApiSource|__init__(target_dir, settings, filename_transform)\ntrigger_url(reporter)}"];
+	7[label="{FilenameTransform|transform_filename()\ntransform_output_path()}"];
+	8[label="{RegexOutputPathTransform|__init__(pattern)}"];
+	9[label="{DateFileNameTransform|__init__(format, fixed_date)}"];
 	WrapHandler [shape=box];
 	ScheduledItem [shape=box];
 	Process [shape=box];
@@ -37,13 +39,15 @@ digraph fetch {
 	4 -> DateRangeSource;
 	4 -> FtpSource;
 	4 -> FtpListingSource;
-	4 -> _HttpBaseSource;
-	_HttpBaseSource -> HttpSource;
-	_HttpBaseSource -> RssSource;
+	4 -> 14;
+	4 -> 10;
+	10 -> 11;
+	10 -> 12;
+	10 -> 13;
 
 	SimpleObject -> FilenameTransform;
-        FilenameTransform -> RegexOutputPathTransform;
-        FilenameTransform -> DataFileNameTransform;
+        7 -> 8;
+        7 -> 9;
 
 	SimpleObject -> ScheduledItem;
 	SimpleObject -> Scheduler;

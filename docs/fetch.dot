@@ -3,7 +3,7 @@ digraph fetch {
 	node[shape=record,style=filled,fillcolor=gray95]
 	edge[dir=back, arrowtail=empty]
 
-	SimpleObject [shape=box];
+	16[label="{SimpleObject}"];
 	4[label="{DataSource|trigger(reporter)}"];
 	RsyncMirrorSource [shape=box];
 	EmptySource [shape=box];
@@ -18,13 +18,13 @@ digraph fetch {
 	7[label="{FilenameTransform|transform_filename()\ntransform_output_path()}"];
 	8[label="{RegexOutputPathTransform|__init__(pattern)}"];
 	9[label="{DateFileNameTransform|__init__(format, fixed_date)}"];
-	WrapHandler [shape=box];
-	ScheduledItem [shape=box];
-	Process [shape=box];
-	ScheduledProcess [shape=box];
+	19[label="{WrapHandler|item:ScheduledItem\nreporter:ResultHandler}"];
+	15[label="{ScheduledItem|name\ncron_pattern\nmodule:DataSource\nprocess:ShellFileProcess}"];
+	18[label="{multiprocessing.\nProcess}"];
+	17[label="{ScheduledProcess|reporter:ResultHandler\nitem:ScheduledItem\nscheduled_time:float\nlog_directory:str\lock_directory:str|run()}"];
 	Scheduler[shape=box];
 	Config[shape=box];
-	RunConfig[shape=box];
+	20[label="{RunConfig|config_path\nschedule:Schedule\nbase_directory\nlog_directory\nlock_directory\notifiers:ResultHandler[]\nmessaging_settings:dict\nlog_levels}"];
 	Uri[shape=box];
 	TaskFailureListener[shape=box];
 	TaskFailureEmailer[shape=box];
@@ -33,7 +33,7 @@ digraph fetch {
 	2[label="{FileProcessor|process()}"];
 	3[label="{ShellFileProcessor}"];
 
-	SimpleObject -> 4;
+	16 -> 4;
 	4 -> RsyncMirrorSource;
 	4 -> EmptySource;
 	4 -> DateRangeSource;
@@ -45,15 +45,15 @@ digraph fetch {
 	10 -> 12;
 	10 -> 13;
 
-	SimpleObject -> FilenameTransform;
+	16 -> 7;
         7 -> 8;
         7 -> 9;
 
-	SimpleObject -> ScheduledItem;
-	SimpleObject -> Scheduler;
+	16 -> 15;
+	16 -> Scheduler;
 	TaskFailureListener -> TaskFailureEmailer;
 	5 -> 6;
-	5 -> WrapHandler;
-	Process -> ScheduledProcess;
+	5 -> 19;
+	18 -> 17;
 	2 -> 3;
 }        

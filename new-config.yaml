@@ -55,7 +55,11 @@ rules:
                 step: "0"
                 type: "an"
                 target: /home/547/smr547/ecmwf_data/sp_20050103_to_20050105.grib
-
+    process: !shell
+       command: 'cp {parent_dir}/{filename} {parent_dir}/{file_stem}.grib.copy'
+       expect_file: '{parent_dir}/{file_stem}.grib.copy'
+     
+   
 
 
   Temperature:

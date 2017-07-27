@@ -20,18 +20,56 @@ class EcmwfApiSource(DataSource):
 
     """
 
-    def __init__(self, target_dir, settings=None, filename_transform=None):
+    def __init__(self, 
+        cls=None,
+        dataset=None,
+        date=None,
+        expver=None,
+        grid=None,
+        area=None,
+        levtype=None,
+        param=None,
+        step=None,
+        stream=None,
+        time=None,
+        typ=None,
+        target=None,
+        filename_transform=None):
         """
-        :type target_dir: str
-        :type setting: dict used to specify ALL ECMWF API request parameters
-        :type filename_transform: FilenameTransform
+        :type kwargs: dict used to specify ALL ECMWF API request parameters
         """
         super(DataSource, self).__init__()
-        self.target_dir = target_dir
+        self.cls = cls
+        self.dataset = dataset
+        self.date = date
+        self.expver = expver
+        self.grid = grid
+        self.area = area
+        self.levtype = levtype
+        self.param = param
+        self.step = step
+        self.stream = stream
+        self.time = time
+        self.typ = typ
+        self.target = target
         self.filename_transform = filename_transform
 
-        # Can either specify one URL or a list of URLs
-        self.settings = settings
+    def _get_api_settings(self):
+        """
+        return a dict containing the sanitised settings required by the ECMWF API
+        """
+        settings = self.__dict__.copy()
+        for key in ["filename_transform", ]:
+            if key in settings:
+                del settings[key]
+        settings['class'] = settings['cls']
+        del settings['cls']
+        settings['type'] = settings['typ']
+        del settings['typ']
+        for key in settings.keys():
+            if settings[key] is None:
+                del settings[key]
+        return settings
 
     def get_uri(self):
         """
@@ -43,7 +81,7 @@ class EcmwfApiSource(DataSource):
                 uri = d["url"]
         except Exception as e:
             uri = "ecmwfapi://UnknownHost"
-        query = urllib.parse.urlencode(self.settings)
+        query = urllib.parse.urlencode(self._get_api_settings())
         return uri + "?" + query
 
     def trigger(self, reporter):
@@ -53,7 +91,7 @@ class EcmwfApiSource(DataSource):
         :type reporter: ResultHandler
         """
 
-        _log.debug("Triggering %s", self.settings)
+        _log.debug("Triggering %s", self._get_api_settings())
         from ecmwfapi import ECMWFDataServer
         server = ECMWFDataServer()
         self._fetch_file(server, reporter)
@@ -61,7 +99,7 @@ class EcmwfApiSource(DataSource):
     def _fetch_file(self, server, reporter, override_existing=False):
         
         def do_fetch(t):
-            settings = self.settings.copy()
+            settings = self._get_api_settings()
             settings["target"] = t
             try:
             	server.retrieve(settings)
@@ -74,8 +112,8 @@ class EcmwfApiSource(DataSource):
             self.get_uri(),
             do_fetch,
             reporter,
-            os.path.basename(self.settings["target"]),
-            os.path.dirname(self.settings["target"]),
+            os.path.basename(self.target),
+            os.path.dirname(self.target),
             filename_transform=self.filename_transform,
             override_existing=override_existing
 	)

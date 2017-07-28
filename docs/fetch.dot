@@ -7,7 +7,7 @@ digraph fetch {
 	4[label="{DataSource|trigger(reporter)}"];
 	RsyncMirrorSource [shape=box];
 	EmptySource [shape=box];
-	DateRangeSource [shape=box];
+	21[label="{DateRangeSource|using:DataSource\noverridden_properties:dict(str,str)\nstart_day\nend_day}"];
 	FtpSource [shape=box];
 	FtpListingSource [shape=box];
 	10[label="{_HttpBaseSource|__init__(target_dir, url, urls...)\ntrigger()\n_fetch_file(...)}"];
@@ -36,7 +36,7 @@ digraph fetch {
 	16 -> 4;
 	4 -> RsyncMirrorSource;
 	4 -> EmptySource;
-	4 -> DateRangeSource;
+	4 -> 21;
 	4 -> FtpSource;
 	4 -> FtpListingSource;
 	4 -> 14;

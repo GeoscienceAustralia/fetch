@@ -34,6 +34,7 @@ class EcmwfApiSource(DataSource):
         time=None,
         typ=None,
         target=None,
+        override_existing=False,
         filename_transform=None):
         """
         :type kwargs: dict used to specify ALL ECMWF API request parameters
@@ -52,6 +53,7 @@ class EcmwfApiSource(DataSource):
         self.time = time
         self.typ = typ
         self.target = target
+        self.override_existing = override_existing
         self.filename_transform = filename_transform
 
     def _get_api_settings(self):
@@ -59,7 +61,7 @@ class EcmwfApiSource(DataSource):
         return a dict containing the sanitised settings required by the ECMWF API
         """
         settings = self.__dict__.copy()
-        for key in ["filename_transform", ]:
+        for key in ["filename_transform", "override_existing" ]:
             if key in settings:
                 del settings[key]
         settings['class'] = settings['cls']
@@ -94,9 +96,9 @@ class EcmwfApiSource(DataSource):
         _log.debug("Triggering %s", self._get_api_settings())
         from ecmwfapi import ECMWFDataServer
         server = ECMWFDataServer()
-        self._fetch_file(server, reporter)
+        self._fetch_file(server, reporter, self.override_existing)
 
-    def _fetch_file(self, server, reporter, override_existing=False):
+    def _fetch_file(self, server, reporter, override_existing):
         
         def do_fetch(t):
             settings = self._get_api_settings()

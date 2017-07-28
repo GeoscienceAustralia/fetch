@@ -9,10 +9,24 @@ import logging
 import urllib
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
+from . import load 
 # from .compat import urljoin
 
 _log = logging.getLogger(__name__)
 
+
+def _rename(aDict, old, new):
+    """
+    rename a key in a dict
+
+    :type aDict: dict
+    :type old: str
+    :type new: str
+    """
+
+    if new in aDict:
+        aDict[new] = aDict[old]
+        del aDict[old]
 
 class EcmwfApiSource(DataSource):
     """
@@ -64,14 +78,9 @@ class EcmwfApiSource(DataSource):
         for key in ["filename_transform", "override_existing" ]:
             if key in settings:
                 del settings[key]
-        settings['class'] = settings['cls']
-        del settings['cls']
-        settings['type'] = settings['typ']
-        del settings['typ']
-        for key in settings.keys():
-            if settings[key] is None:
-                del settings[key]
-        return settings
+        _rename(settings, "cls", "class")
+        _rename(settings, "typ", "type")
+        return load._remove_nones(settings)
 
     def get_uri(self):
         """

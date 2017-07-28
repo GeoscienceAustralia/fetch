@@ -31,6 +31,7 @@ Now:
 
     python -m fetch.scripts.now config.yaml LS7_CPF
 
+Developers should refer to the ``docs`` directory and the [README](./docs/README.md) file therein.
 
 ## Configuration file
 
@@ -146,6 +147,40 @@ Download files from an RSS feed.
     source: !rss
       url: http://landsat.usgs.gov/cpf.rss
       target_dir: /eoancillarydata/sensor-specific/LANDSAT8/CalibrationParameterFile
+
+#### !ecmwf-api
+
+Fetch now allows access to the batch data servers of the European Centre for Medium-term Weather Forcastingi. The data archive is accessed via
+the [Python ECMWF API](https://software.ecmwf.int/wiki/display/WEBAPI/Accessing+ECMWF+data+servers+in+batch).
+
+The ECMWF API required properties to be specfied as follows:
+
+    source: !ecmwf-api
+        cls: ei             
+        dataset: interim
+        date: 2005-01-03/to/2005-01-05
+        area: 0/100/-50/160
+        expver: 1
+        grid: 0.125/0.125
+        levtype: sfc
+        param: 134.128
+        stream: oper
+        time: 00:00:00
+        step: 0
+        typ: an
+        target: /home/547/smr547/ecmwf_data/sp_20050103_to_20050105.grib
+        override_existing: True
+
+The keys (dataset, date, area, etc) are [MARS keywords] (https://software.ecmwf.int/wiki/display/UDOC/MARS+keywords)
+ used to specify various aspects of the data retrieval. Please note that the ``class`` and
+``type`` keywords have different spelling (``cls`` and ``typ``) to avoid Python compiler name clashes.
+
+Request parameter are complex. ECMWF recommend using the ``View Request Parameters`` feature as you get familiar with 
+the [avaiable ECMWF data sets](http://apps.ecmwf.int/datasets/). This
+will assist you in preparing error-free requests.
+
+The ``!ecmwf-api`` datasource supports [Transformers][Transformers] and the ``override_existing`` option (defaults to ``False``). 
+``!ecmwf-api`` datasources can also be used with the ``!date-range`` datasource.
 
 ### Transformers
 

@@ -1,0 +1,123 @@
+# Sequence diagram for the FETCH "One time run" use case
+#
+# Use the website https://www.websequencediagrams.com/
+# to generate the graphical version of this file.
+#
+# A PDF of this diagram is included in the GIT repo
+# 
+
+title fetch: One time run
+
+participant os
+participant <<module>>\ncore as core
+participant fetch.scripts\n.now as N
+participant <<module>>\nauto as A
+participant RunConfig as RC
+participant <<module>>\nload as L
+participant Config as C
+participant ScheduledItem as SI
+participant ScheduledProcess as SP
+participant WrapHandler as WH
+participant DataSource\nEcwmfAPI as DS
+participant Filename\nTransform as FNT
+participant NotifyResultHandler as NRH
+participant Messenger as M
+participant Shell\nFile\nProcessor as SFP
+participant ECWMFServer as S
+
+
+os->+N: main()
+N->+A: init_run_config()
+A->*RC: create
+A->+RC: load()
+
+
+RC->+L: load_yaml()
+
+note right of L
+ Many objects are instantiated directy from
+ their YAML representation read from the
+ config file
+end note
+L->*+C: load_yaml_from_dict()
+C->*SI: create
+C->*DS: create
+note right of DS
+ECMWF API\nmodue is\nloaded here
+end note
+C->*FNT: create
+
+C->*SFP: create
+
+
+C-->-L: :Config
+L-->-RC: :Config
+RC-->-A: :RunConfig
+A-->-N: :RunConfig
+
+N->+A: run_items()
+A->*NRH: create
+A->+A: run_item()
+A->*SP: create
+A->+SP: start()
+par
+SP-->+SP: run()\n(via fork()/exec())
+end
+note right of SP
+the run() method executes 
+in a child process
+end note
+SP->*WH: create
+SP->+DS: trigger()
+DS->*S : create
+DS->+DS: _fetch_file()
+
+
+DS->+core: fetch_file()
+core->+FNT: transform_output_output()
+FNT-->-core: transformed output path
+core->+FNT: transform_filename()
+FNT-->-core: transformed filename
+core->core: mkdirs()
+core->core: create temp\nfile for\noutput
+core->+DS: do_fetch()
+DS->DS: get_api_settings()
+DS->+S: retrieve()
+S->*File: create
+note right of File
+File created
+on disk
+end note
+S-->-DS: result
+DS-->-core: success true/false
+destroy S
+core->File: rename()
+core->+WH: file_error() or file_complete()
+
+
+WH->+SFP: process()
+note right of SFP
+File post processing\ndone here
+end note
+SFP-->-WH:
+
+WH->+NRH: file_error() or file_complete()
+NRH->*M: create
+NRH->+M: announce()
+note right of M
+Publish\nnotification\non bus
+end note
+M-->-NRH:
+destroy M
+NRH-->-WH:
+
+WH-->-core:
+core-->-DS:
+DS-->-DS:
+DS-->-SP:
+SP-->-SP:
+SP-->-A: child terminated
+
+A-->-A:
+A-->-N:
+N-->-os: exit()

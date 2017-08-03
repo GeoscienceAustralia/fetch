@@ -8,3 +8,4 @@
 *.egg binary
 *.jpg binary
 
+fetch/_version.py export-subst

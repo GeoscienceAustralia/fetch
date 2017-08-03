@@ -5,17 +5,13 @@ import os
 import sys
 
 from setuptools import setup
-
-version = '1.1.4b'
-
-# Append TeamCity build number if it gives us one.
-if 'TC_BUILD_NUMBER' in os.environ and version.endswith('b'):
-    version += '' + os.environ['TC_BUILD_NUMBER']
+import versioneer
 
 setup(name='fetch',
       maintainer='Jeremy Hooke',
       maintainer_email='jeremy.hooke@ga.gov.au',
-      version=version,
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description='Automatic retrieval of ancillary and data',
       packages=[
           'fetch',

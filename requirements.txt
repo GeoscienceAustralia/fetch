@@ -1,10 +1,13 @@
 --index-url https://pypi.python.org/simple/
 
 # Test dependencies
+pep8
 pytest
 pytest-cov
 mock
-pylint==1.5
+# Freeze pylint/astroid to minimise unrelated Travis breakages.
+pylint==1.7.2
+astroid==1.5.3
 
 # Install the remaining from setup.py:
 -e .

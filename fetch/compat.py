@@ -23,5 +23,5 @@ try:
     from setproctitle import setproctitle
 except ImportError:
     # On non-support platforms we won't bother setting the process name.
-    setproctitle = lambda title: None
-
+    def setproctitle(title):
+        return None

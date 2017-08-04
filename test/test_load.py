@@ -63,13 +63,13 @@ def print_simple_obj_diff(dict1, dict2):
         print('+   {!r}'.format(dict2))
         return
 
-    if type(dict1) == list:
+    if isinstance(dict1, list):
         print_simple_list_diff(dict1, dict2)
         return
 
-    if type(dict1) != dict:
+    if not isinstance(dict1, dict):
         dict1 = dict1.__dict__
-    if type(dict2) != dict:
+    if not isinstance(dict2, dict):
         dict2 = dict2.__dict__
 
     for n in dict1:

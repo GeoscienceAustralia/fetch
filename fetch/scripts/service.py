@@ -24,5 +24,6 @@ def main():
     run_config = auto.init_run_config(config_location)
     auto.run_loop(run_config)
 
+
 if __name__ == '__main__':
     main()

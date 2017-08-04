@@ -24,6 +24,7 @@ from .util import rsync, Uri
 _log = logging.getLogger(__name__)
 
 
+# pylint: disable=eq-without-hash
 class SimpleObject(object):
     """
     An object with matching constructor arguments and properties.
@@ -57,12 +58,6 @@ class DataSource(SimpleObject):
     Overridden by specific subclasses: HTTP, FTP, RSS and others.
     """
 
-    def __init__(self):
-        """
-        Base class constructor.
-        """
-        super(DataSource, self).__init__()
-
     def trigger(self, reporter):
         """
         Trigger a download from the source.
@@ -80,7 +75,8 @@ class RemoteFetchException(Exception):
     """
 
     def __init__(self, summary, detailed):
-        super(RemoteFetchException, self).__init__(summary)
+        super(RemoteFetchException, self).__init__()
+        self.summary = summary
         self.detailed = detailed
 
 
@@ -127,9 +123,6 @@ class FilenameTransform(SimpleObject):
     Primarily useful for situations such as putting files in folders by date.
     """
 
-    def __init__(self):
-        super(FilenameTransform, self).__init__()
-
     def transform_filename(self, source_filename):
         """
         Modify output filename
@@ -174,7 +167,7 @@ class RegexpOutputPathTransform(FilenameTransform):
 
         self.pattern = pattern
 
-    def transform_output_path(self, path, source_filename=None):
+    def transform_output_path(self, output_path, source_filename):
         """
 
         :param path:
@@ -190,12 +183,12 @@ class RegexpOutputPathTransform(FilenameTransform):
         m = re.match(self.pattern, source_filename)
 
         if not m:
-            _log.info('No regexp match for %r', path)
-            return path
+            _log.info('No regexp match for %r', output_path)
+            return output_path
 
         groups = m.groupdict()
 
-        return path.format(**groups)
+        return output_path.format(**groups)
 
 
 class DateFilenameTransform(FilenameTransform):

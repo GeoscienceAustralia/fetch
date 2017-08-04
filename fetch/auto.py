@@ -15,7 +15,11 @@ import logging
 import multiprocessing
 import os
 import signal
+
+# This pylint warning is wrong: stat still exists?
+# pylint: disable=bad-python3-import
 import stat
+
 import sys
 import time
 
@@ -189,7 +193,7 @@ class ScheduledProcess(multiprocessing.Process):
 
         except RemoteFetchException as e:
             print('-' * 10)
-            print(e.message)
+            print(e.summary)
             print('-' * 10)
             print(e.detailed)
             sys.exit(1)

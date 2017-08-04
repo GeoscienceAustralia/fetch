@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 from __future__ import print_function
 
+from __future__ import absolute_import
 import os
 import sys
 
@@ -18,17 +19,17 @@ setup(name='fetch',
           'fetch.scripts'
       ],
       install_requires=[
-                           'arrow',
-                           'croniter',
-                           'feedparser',
-                           'lxml',
-                           'pathlib',
-                           'pyyaml',
-                           'requests',
-                       ] + (
-                           # Setting subprocess names is only support on Linux
-                           ['setproctitle'] if 'linux' in sys.platform else []
-                       ),
+          'arrow',
+          'croniter',
+          'feedparser',
+          'lxml',
+          'pathlib',
+          'pyyaml',
+          'requests',
+      ] + (
+          # Setting subprocess names is only support on Linux
+          ['setproctitle'] if 'linux' in sys.platform else []
+      ),
       entry_points={
           'console_scripts': [
               'fetch-service = fetch.scripts.service:main',

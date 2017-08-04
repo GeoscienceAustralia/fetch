@@ -35,7 +35,7 @@ def _fetch_files(hostname,
 
     try:
         ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
-    except:
+    except BaseException:
         _log.exception('Error connecting to FTP')
         raise RemoteFetchException(
             'Error connecting to FTP',
@@ -161,7 +161,7 @@ class FtpListingSource(DataSource):
             files = [
                 os.path.join(self.source_dir, f)
                 for f in files if re.match(self.name_pattern, os.path.basename(f))
-                ]
+            ]
             _log.debug('Filtered list of length %r', len(files))
             return files
 

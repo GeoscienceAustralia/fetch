@@ -1,6 +1,7 @@
 --index-url https://pypi.python.org/simple/
 
 # Test dependencies
+pep8
 pytest
 pytest-cov
 mock

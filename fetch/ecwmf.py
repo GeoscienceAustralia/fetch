@@ -9,7 +9,7 @@ import logging
 import urllib
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
-from . import load 
+from . import load
 # from .compat import urljoin
 
 _log = logging.getLogger(__name__)
@@ -28,28 +28,29 @@ def _rename(aDict, old, new):
         aDict[new] = aDict[old]
         del aDict[old]
 
+
 class EcmwfApiSource(DataSource):
     """
     Class for data retrievals using the ECMWF API.
 
     """
 
-    def __init__(self, 
-        cls=None,
-        dataset=None,
-        date=None,
-        expver=None,
-        grid=None,
-        area=None,
-        levtype=None,
-        param=None,
-        step=None,
-        stream=None,
-        time=None,
-        typ=None,
-        target=None,
-        override_existing=False,
-        filename_transform=None):
+    def __init__(self,
+                 cls=None,
+                 dataset=None,
+                 date=None,
+                 expver=None,
+                 grid=None,
+                 area=None,
+                 levtype=None,
+                 param=None,
+                 step=None,
+                 stream=None,
+                 time=None,
+                 typ=None,
+                 target=None,
+                 override_existing=False,
+                 filename_transform=None):
         """
         :type kwargs: dict used to specify ALL ECMWF API request parameters
         """
@@ -75,7 +76,7 @@ class EcmwfApiSource(DataSource):
         return a dict containing the sanitised settings required by the ECMWF API
         """
         settings = self.__dict__.copy()
-        for key in ["filename_transform", "override_existing" ]:
+        for key in ["filename_transform", "override_existing"]:
             if key in settings:
                 del settings[key]
         _rename(settings, "cls", "class")
@@ -87,7 +88,7 @@ class EcmwfApiSource(DataSource):
         Synthesise a URI from the configured ECMWF host and requestsettings
         """
         try:
-            with open(os.environ.get("HOME")+"/.ecmwfapirc") as f:
+            with open(os.environ.get("HOME") + "/.ecmwfapirc") as f:
                 d = json.loads(f.read())
                 uri = d["url"]
         except Exception as e:
@@ -108,12 +109,12 @@ class EcmwfApiSource(DataSource):
         self._fetch_file(server, reporter, self.override_existing)
 
     def _fetch_file(self, server, reporter, override_existing):
-        
+
         def do_fetch(t):
             settings = self._get_api_settings()
             settings["target"] = t
             try:
-            	server.retrieve(settings)
+                server.retrieve(settings)
             except Exception as e:
                 _log.debug("ECMWFDataServer rasied " + e)
                 return False
@@ -127,6 +128,4 @@ class EcmwfApiSource(DataSource):
             os.path.dirname(self.target),
             filename_transform=self.filename_transform,
             override_existing=override_existing
-	)
-	
-	
+        )

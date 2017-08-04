@@ -1,5 +1,5 @@
 """
-File download from European Centre for Medium-Range Weather Forecasts 
+File download from European Centre for Medium-Range Weather Forecasts
 using ECMWF Web API
 """
 from __future__ import absolute_import
@@ -34,7 +34,10 @@ class EcmwfApiSource(DataSource):
     Class for data retrievals using the ECMWF API.
 
     """
-
+    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-arguments
+    # Providing an instance variable for each paramater
+    # available in the ECMWF API.
     def __init__(self,
                  cls=None,
                  dataset=None,
@@ -54,7 +57,7 @@ class EcmwfApiSource(DataSource):
         """
         :type kwargs: dict used to specify ALL ECMWF API request parameters
         """
-        super(DataSource, self).__init__()
+        super(EcmwfApiSource, self).__init__()
         self.cls = cls
         self.dataset = dataset
         self.date = date

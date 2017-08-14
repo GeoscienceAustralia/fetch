@@ -110,7 +110,7 @@ class EcmwfApiSource(DataSource):
             with open(os.environ.get("HOME") + "/.ecmwfapirc") as f:
                 d = json.loads(f.read())
                 uri = d["url"]
-        except Exception as e:
+        except IOError as e:
             uri = "ecmwfapi://UnknownHost"
         query = urllib.parse.urlencode(self._get_api_settings())
         return uri + "?" + query
@@ -126,6 +126,8 @@ class EcmwfApiSource(DataSource):
         # Optional library.
         #: pylint: disable=import-error
         from ecmwfapi import ECMWFDataServer
+        from urllib2 import URLError
+
         server = ECMWFDataServer()
         self._fetch_file(server, reporter, self.override_existing)
 
@@ -137,9 +139,9 @@ class EcmwfApiSource(DataSource):
             try:
                 server.retrieve(settings)
             except URLError as e:
-                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?" % (str(e), ))
+                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?" % e)
                 return False
-            except Exception as e:
+            except Exception as e:    # pylint: disable-broad-except
                 _log.debug("ECMWFDataServer rasied " + e)
                 return False
             return True

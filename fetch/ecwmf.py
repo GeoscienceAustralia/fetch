@@ -9,25 +9,41 @@ import logging
 import urllib
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
-from . import load
 # from .compat import urljoin
 
 _log = logging.getLogger(__name__)
 
 
-def _rename(aDict, old, new):
+def _rename(the_dict, old, new):
     """
     rename a key in a dict
 
-    :type aDict: dict
+    :type the_dict: dict
     :type old: str
     :type new: str
     """
 
-    if new in aDict:
-        aDict[new] = aDict[old]
-        del aDict[old]
+    if new in the_dict:
+        the_dict[new] = the_dict[old]
+        del the_dict[old]
 
+
+def _remove_nones(dict_):
+    """
+    Remove fields from the dict whose values are None.
+
+    Returns a new dict.
+    :type dict_: dict
+    :rtype dict
+
+    >>> _remove_nones({'a': 4, 'b': None, 'c': None})
+    {'a': 4}
+    >>> sorted(_remove_nones({'a': 'a', 'b': 0}).items())
+    [('a', 'a'), ('b', 0)]
+    >>> _remove_nones({})
+    {}
+    """
+    return {k: v for k, v in dict_.items() if v is not None}
 
 class EcmwfApiSource(DataSource):
     """
@@ -84,7 +100,7 @@ class EcmwfApiSource(DataSource):
                 del settings[key]
         _rename(settings, "cls", "class")
         _rename(settings, "typ", "type")
-        return load._remove_nones(settings)
+        return _remove_nones(settings)
 
     def get_uri(self):
         """
@@ -107,6 +123,8 @@ class EcmwfApiSource(DataSource):
         """
 
         _log.debug("Triggering %s", self._get_api_settings())
+        # Optional library.
+        #: pylint: disable=import-error
         from ecmwfapi import ECMWFDataServer
         server = ECMWFDataServer()
         self._fetch_file(server, reporter, self.override_existing)
@@ -118,6 +136,9 @@ class EcmwfApiSource(DataSource):
             settings["target"] = t
             try:
                 server.retrieve(settings)
+            except URLError as e:
+                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?" % (str(e), ))
+                return False
             except Exception as e:
                 _log.debug("ECMWFDataServer rasied " + e)
                 return False

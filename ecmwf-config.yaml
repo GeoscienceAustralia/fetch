@@ -5,18 +5,19 @@
 #  -> Viewable here: http://rhe-neo-dev-repo.dev.lan/git/blob/pma!fetch.git/master/README.md
 
 # The work directory (for log and lock files):
-directory: /data/fetch
+directory: /home/547/smr547/data/fetch
 
 # Notification settings (for errors):
 notify:
-  email: ['jeremy.hooke@ga.gov.au']
+  email: ['steven.ring@ga.gov.au']
 
 # Message bus config, for announcing arrivals. Optional.
-messaging:
-  host: rhe-neo-dev01.dev.lan
-  # virtual_host:
-  username: fetch
-  password: fetch
+#  No messaging
+# messaging:
+#   host: rhe-neo-dev01.dev.lan
+#   # virtual_host:
+#   username: fetch
+#   password: fetch
 
 # Logging level for modules (any python module can be added here)
 log:

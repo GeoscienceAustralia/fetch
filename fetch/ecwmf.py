@@ -126,7 +126,7 @@ class EcmwfApiSource(DataSource):
         # Optional library.
         #: pylint: disable=import-error
         from ecmwfapi import ECMWFDataServer
-        from urllib2 import URLError
+        from urllib.error import URLError
 
         server = ECMWFDataServer()
         self._fetch_file(server, reporter, self.override_existing)
@@ -141,7 +141,7 @@ class EcmwfApiSource(DataSource):
             except URLError as e:
                 _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?" % e)
                 return False
-            except Exception as e:    # pylint: disable-broad-except
+            except Exception as e:    # pylint: disable=broad-except
                 _log.debug("ECMWFDataServer rasied " + e)
                 return False
             return True

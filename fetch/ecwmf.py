@@ -8,6 +8,11 @@ import json
 import logging
 import urllib
 
+try:
+    from urllib.request import URLError
+except ImportError:
+    from urllib2 import URLError
+
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
 # from .compat import urljoin
 
@@ -44,6 +49,7 @@ def _remove_nones(dict_):
     {}
     """
     return {k: v for k, v in dict_.items() if v is not None}
+
 
 class EcmwfApiSource(DataSource):
     """
@@ -126,7 +132,6 @@ class EcmwfApiSource(DataSource):
         # Optional library.
         #: pylint: disable=import-error
         from ecmwfapi import ECMWFDataServer
-        from urllib.error import URLError
 
         server = ECMWFDataServer()
         self._fetch_file(server, reporter, self.override_existing)
@@ -139,7 +144,7 @@ class EcmwfApiSource(DataSource):
             try:
                 server.retrieve(settings)
             except URLError as e:
-                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?" % e)
+                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?", e)
                 return False
             except Exception as e:    # pylint: disable=broad-except
                 _log.debug("ECMWFDataServer rasied " + e)

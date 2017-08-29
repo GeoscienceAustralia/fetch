@@ -34,21 +34,21 @@ Now:
 
 ## Configuration file
 
-Configuration files are loaded in [YAML](https://en.wikipedia.org/wiki/YAML) format 
+Configuration files are loaded in [YAML](https://en.wikipedia.org/wiki/YAML) format
 (essentially nested lists and dictionaries: YAML is a superset of JSON).
 
 An example configuration file:
 
     # Work directory:
     directory: /data/ancillary-fetch
-    
+
     # Notification settings (for errors):
     notify:
       email: ['jeremy.hooke@ga.gov.au']
-      
+
     # Download rules:
     rules:
-    
+
       Modis utcpole-leapsec:
         schedule: '0 7 * * mon'
         source: !http-files
@@ -56,7 +56,7 @@ An example configuration file:
           - http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/utcpole.dat
           - http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat
           target_dir: /eoancillarydata/sensor-specific/MODIS/
-          
+
       LS8 CPF:
         schedule: '*/30 * 1 1,4,7,10 *'
         source: !rss
@@ -66,14 +66,14 @@ An example configuration file:
 `directory:` specifies the work directory for the daemon lock and log files.
 
 `notify:` allows configuration of error notification.
- 
+
 The third option contains download rules (`rules:`).
- 
-- In this case there are two rules specified: one http download of utcpole/leapsec files, 
+
+- In this case there are two rules specified: one http download of utcpole/leapsec files,
 and an RSS feed download of CPF files.
 
-- Rules are prefixed by a name: in the above example they are named `Modis utcpole-leapsec` and 
-`LS8 CPF`. 
+- Rules are prefixed by a name: in the above example they are named `Modis utcpole-leapsec` and
+`LS8 CPF`.
 
 - Names are used as an ID for the rule.
 
@@ -102,6 +102,8 @@ Example:
       - http://oceandata.sci.gsfc.nasa.gov/Ancillary/LUTs/modis/leapsec.dat
       target_dir: /eoancillarydata/sensor-specific/MODIS/
 
+All http rules have a `connection_timeout` option, defaulting to 100 (seconds).
+
 #### !ftp-files
 
 Like http-files, but for FTP.
@@ -112,7 +114,7 @@ Like http-files, but for FTP.
       - /ancillary/ephemeris/tle/drl.tle
       - /ancillary/ephemeris/tle/norad.tle
       target_dir: /eoancillarydata/sensor-specific/MODIS/tle
-      
+
 
 #### !http-directory
 
@@ -150,10 +152,10 @@ Download files from an RSS feed.
 Transformers allow for dynamic folder and file names (both sources and destinations).
 
 Downloaders supporting them have a `filename-transform:` property.
- 
+
 #### !date-pattern
 
-Put the current date/time in the filename. 
+Put the current date/time in the filename.
 
 This takes a [format](https://docs.python.org/2/library/string.html#formatstrings) string with properties 'year', 'month', 'day', 'julday' (Julian day) and 'filename' (the original filename)
 
@@ -215,7 +217,7 @@ Example:
         url: ''
         # Overridden by the property above
         target_dir: ''
-        
+
 This expands to four `!http-directory` downloaders. Three days ago, two days ago, one day ago and today.
 
 The properties in `overridden_properties:` are formatted with the given date and set on each `!http-directory` downloader.

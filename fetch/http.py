@@ -14,6 +14,8 @@ from lxml import etree
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
 from .compat import urljoin
 
+DEFAULT_CONNECT_TIMEOUT_SECS = 100
+
 _log = logging.getLogger(__name__)
 
 
@@ -58,13 +60,20 @@ class _HttpBaseSource(DataSource):
     Base class for HTTP retrievals.
     """
 
-    def __init__(self, target_dir, url=None, urls=None, filename_transform=None, beforehand=None):
+    def __init__(self,
+                 target_dir,
+                 url=None,
+                 urls=None,
+                 filename_transform=None,
+                 beforehand=None,
+                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
         """
         :type urls: list of str
         :type url: str
         :type target_dir: str
         :type beforehand: HttpPostAction
         :type filename_transform: FilenameTransform
+        :type connection_timeout: float
         """
         super(_HttpBaseSource, self).__init__()
         self.target_dir = target_dir
@@ -75,6 +84,9 @@ class _HttpBaseSource(DataSource):
         # Can either specify one URL or a list of URLs
         self.url = url
         self.urls = urls
+
+        # Connection timeout in seconds
+        self.connection_timeout = connection_timeout
 
     def _get_all_urls(self):
         """
@@ -140,7 +152,7 @@ class _HttpBaseSource(DataSource):
 
         def do_fetch(t):
             """Fetch data to filename t"""
-            with closing(session.get(url, stream=True)) as res:
+            with closing(session.get(url, stream=True, timeout=self.connection_timeout)) as res:
                 if res.status_code != 200:
                     body = res.text
                     _log.debug('Received text %r', res.text)
@@ -191,10 +203,20 @@ class HttpListingSource(_HttpBaseSource):
     A pattern can be supplied to limit files by filename.
     """
 
-    def __init__(self, target_dir, url=None, urls=None, name_pattern='.*', filename_transform=None, beforehand=None):
-        super(HttpListingSource, self).__init__(target_dir, url=url, urls=urls,
+    def __init__(self,
+                 target_dir,
+                 url=None,
+                 urls=None,
+                 name_pattern='.*',
+                 filename_transform=None,
+                 beforehand=None,
+                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
+        super(HttpListingSource, self).__init__(target_dir,
+                                                url=url,
+                                                urls=urls,
                                                 filename_transform=filename_transform,
-                                                beforehand=beforehand)
+                                                beforehand=beforehand,
+                                                connection_timeout=connection_timeout)
         self.name_pattern = name_pattern
 
     def trigger_url(self, reporter, session, url):
@@ -204,7 +226,7 @@ class HttpListingSource(_HttpBaseSource):
         :type session: requests.Session
         :type url: str
         """
-        res = session.get(url)
+        res = session.get(url, timeout=self.connection_timeout)
         if res.status_code == 404:
             _log.debug("Listing page doesn't exist yet. Skipping.")
             return
@@ -271,7 +293,7 @@ class RssSource(_HttpBaseSource):
         :type url: str
         """
         # Fetch feed.
-        res = session.get(url)
+        res = session.get(url, timeout=self.connection_timeout)
 
         if res.status_code != 200:
             # We don't bother with reporter.file_error() as this initial fetch is critical.

@@ -78,6 +78,7 @@ def _fetch_files(hostname,
 
             except EOFError:
                 if retry_count >= retries:
+                    _log.debug('Error fetching file. Reconnecting to ftp server...')
                     raise
                 _log.debug('Error fetching file. Reconnecting to ftp server...')
 

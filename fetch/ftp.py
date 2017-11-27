@@ -78,14 +78,28 @@ def _fetch_files(hostname,
 
             except EOFError:
                 if retry_count >= retries:
+                    _log.debug('Error fetching file. Reconnecting to ftp server...')
                     raise
+                _log.debug('Error fetching file. Reconnecting to ftp server...')
 
-                # Connection was closed try to re-connect
-                ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
+                # Connection was closed; try to re-connect
+                try:
+                    ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
+                except BaseException:
+                    _log.exception('Error connecting to FTP')
+                    raise RemoteFetchException(
+                        'Error re-connecting to FTP',
+                        'host: {}, timeout: {}'.format(hostname, DEFAULT_SOCKET_TIMEOUT_SECS)
+                    )
+
                 ftp.login()
     except StopIteration:
-        # Completed the list of files to grab
+        # Completed download of matching files
         pass
+    except Exception as e:
+        # Log exception message
+        _log.exception('Exception raised during FTP process: %s', getattr(e, 'message', str(e)))
+        raise
     finally:
         ftp.quit()
 

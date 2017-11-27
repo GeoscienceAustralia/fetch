@@ -44,7 +44,7 @@ def test_dump_load_obj_full():
 
 
 @with_neocommon
-def test_dump_load_obj_with_messaing():
+def test_dump_load_obj_with_messaging():
     def make_config_no_messaging():
         c = _make_config()
         c['messaging'] = {

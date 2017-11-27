@@ -19,7 +19,8 @@ def _fetch_files(hostname,
                  reporter,
                  get_filepaths_fn,
                  override_existing=False,
-                 filename_transform=None):
+                 filename_transform=None,
+                 retries=3):
     """
     Fetch fetch files on the given FTP server.
 
@@ -45,29 +46,60 @@ def _fetch_files(hostname,
     try:
         ftp.login()
 
-        files = get_filepaths_fn(ftp)
+        files_itr = iter(get_filepaths_fn(ftp))
+        filename = next(files_itr)
+        retry_count = 0
 
-        for filename in files:
-            _log.debug('Next filename: %r', filename)
+        while True:
+            try:
+                retry_count += 1
+                _log.debug('Next filename: %r', filename)
 
-            def ftp_fetch(t):
-                """Fetch data to filename t"""
-                # https://bitbucket.org/logilab/pylint/issue/271/spurious-warning-w0640-issued-for-loop
-                # pylint: disable=cell-var-from-loop
-                _log.debug('Retrieving %r to %r', filename, t)
-                with open(t, 'wb') as f:
-                    ftp.retrbinary('RETR ' + filename, f.write)
-                return True
+                def ftp_fetch(t):
+                    """Fetch data to filename t"""
+                    # https://bitbucket.org/logilab/pylint/issue/271/spurious-warning-w0640-issued-for-loop
+                    # pylint: disable=cell-var-from-loop
+                    _log.debug('Retrieving %r to %r', filename, t)
+                    with open(t, 'wb') as f:
+                        ftp.retrbinary('RETR ' + filename, f.write)
+                    return True
 
-            fetch_file(
-                'ftp://%s%s' % (hostname, filename),
-                ftp_fetch,
-                reporter,
-                os.path.basename(filename),
-                target_dir,
-                filename_transform=filename_transform,
-                override_existing=override_existing
-            )
+                fetch_file(
+                    'ftp://%s%s' % (hostname, filename),
+                    ftp_fetch,
+                    reporter,
+                    os.path.basename(filename),
+                    target_dir,
+                    filename_transform=filename_transform,
+                    override_existing=override_existing
+                )
+                filename = next(files_itr)
+                retry_count = 0
+
+            except EOFError:
+                if retry_count >= retries:
+                    _log.debug('Error fetching file. Reconnecting to ftp server...')
+                    raise
+                _log.debug('Error fetching file. Reconnecting to ftp server...')
+
+                # Connection was closed; try to re-connect
+                try:
+                    ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
+                except BaseException:
+                    _log.exception('Error connecting to FTP')
+                    raise RemoteFetchException(
+                        'Error re-connecting to FTP',
+                        'host: {}, timeout: {}'.format(hostname, DEFAULT_SOCKET_TIMEOUT_SECS)
+                    )
+
+                ftp.login()
+    except StopIteration:
+        # Completed download of matching files
+        pass
+    except Exception as e:
+        # Log exception message
+        _log.exception('Exception raised during FTP process: %s', getattr(e, 'message', str(e)))
+        raise
     finally:
         ftp.quit()
 

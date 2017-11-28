@@ -7,6 +7,7 @@ import ftplib
 import logging
 import os
 import re
+import time
 
 from ._core import DataSource, fetch_file, RemoteFetchException
 
@@ -20,7 +21,8 @@ def _fetch_files(hostname,
                  get_filepaths_fn,
                  override_existing=False,
                  filename_transform=None,
-                 retries=3):
+                 retries=3,
+                 retry_delay=5):
     """
     Fetch fetch files on the given FTP server.
 
@@ -32,6 +34,8 @@ def _fetch_files(hostname,
     :type hostname: str
     :type target_dir: str
     :type reporter: ResultHandler
+    :type retries: int
+    :type retry_delay: int
     """
 
     try:
@@ -76,13 +80,16 @@ def _fetch_files(hostname,
                 filename = next(files_itr)
                 retry_count = 0
 
-            except EOFError:
+            except (EOFError, ftplib.error_temp):
+                # ftplib.error_temp represents a 4XX error by the server
+
                 if retry_count >= retries:
                     _log.debug('Error fetching file. Reconnecting to ftp server...')
                     raise
                 _log.debug('Error fetching file. Reconnecting to ftp server...')
 
                 # Connection was closed; try to re-connect
+                time.sleep(retry_delay)
                 try:
                     ftp = ftplib.FTP(hostname, timeout=DEFAULT_SOCKET_TIMEOUT_SECS)
                 except BaseException:

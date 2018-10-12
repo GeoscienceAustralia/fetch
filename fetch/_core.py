@@ -503,7 +503,7 @@ class TaskFailureEmailer(TaskFailureListener):
         if process.exitcode < 0:
             return
 
-        with open(process.log_file, 'rb') as f:
+        with open(process.log_file, 'rt') as f:
             msg = f.read()
 
         self._send_mail(msg, process.name)

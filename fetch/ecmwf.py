@@ -7,19 +7,57 @@ import os
 import json
 import logging
 import urllib
-try:
-    from urllib.parse import urlencode
-except:
-    from urllib import urlencode
 
 try:
-    from urllib.request import URLError
+    from urllib.error import URLError
+    from http.client import HTTPException
+    from urllib.parse import urlencode
 except ImportError:
     from urllib2 import URLError
+    from httplib import HTTPException
+    from urllib import urlencode
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
+from .util import remove_nones
 
 _log = logging.getLogger(__name__)
+
+try:
+    # Optional library
+    from ecmwfapi import (
+        APIRequest, APIException,
+        ECMWFDataServer as _ECMWFDataServer
+    )
+
+    class ECMWFDataServer(_ECMWFDataServer):
+
+        def retrieve(self, req):
+            """
+            Override the nativee method to return the result object
+            Required to verify the downloaded object's size
+            """
+            target = req.get("target")
+            dataset = req.get("dataset")
+            c = APIRequest(
+                self.url,
+                "datasets/%s" % (dataset, ),
+                self.email,
+                self.key,
+                self.trace,
+                verbose=self.verbose
+            )
+            result = c.execute(req, target)
+
+            return result
+
+
+except ImportError:
+    class APIException(Exception):
+        pass
+
+    class ECMWFDataServer(object):
+        def __init__(self, *args, **kwargs):
+            raise NotImplementedError("ECMWF client libraries not installed")
 
 
 def _rename(the_dict, old, new):
@@ -42,24 +80,6 @@ def _rename(the_dict, old, new):
         the_dict[new] = the_dict.pop(old)
 
     return the_dict
-
-
-def _remove_nones(dict_):
-    """
-    Remove fields from the dict whose values are None.
-
-    Returns a new dict.
-    :type dict_: dict
-    :rtype dict
-
-    >>> _remove_nones({'a': 4, 'b': None, 'c': None})
-    {'a': 4}
-    >>> sorted(_remove_nones({'a': 'a', 'b': 0}).items())
-    [('a', 'a'), ('b', 0)]
-    >>> _remove_nones({})
-    {}
-    """
-    return {k: v for k, v in dict_.items() if v is not None}
 
 
 class EcmwfApiSource(DataSource):
@@ -117,18 +137,25 @@ class EcmwfApiSource(DataSource):
                 del settings[key]
         _rename(settings, "cls", "class")
         _rename(settings, "typ", "type")
-        return _remove_nones(settings)
+        return remove_nones(settings)
 
     def get_uri(self):
         """
-        Synthesise a URI from the configured ECMWF host and requestsettings
+        Synthesise a URI from the configured ECMWF host and request settings
         """
         try:
-            with open(os.environ.get("HOME") + "/.ecmwfapirc") as f:
-                d = json.loads(f.read())
-                uri = d.get("url", "ecmwfapi://UnknownHost")
-        except IOError as e:
-            uri = "ecmwfapi://UnknownHost"
+            config_location = os.path.normpath(
+                os.path.expanduser("~/.ecmwfapirc")
+            )
+            with open(config_location, 'r') as f:
+                uri = json.loads(f.read())['url']
+        except (IOError, KeyError) as e:
+            _log.debug('Unable to read url configuration: %s', str(e))
+            raise RemoteFetchException(
+                'Unable to read url configuration at %s',
+                config_location
+            )
+
         query = urlencode(self._get_api_settings())
         return uri + "?" + query
 
@@ -140,11 +167,7 @@ class EcmwfApiSource(DataSource):
         """
 
         _log.debug("Triggering %s", self._get_api_settings())
-        # Optional library.
-        #: pylint: disable=import-error
-        from ecmwfapi import ECMWFDataServer
-
-        server = ECMWFDataServer()
+        server = ECMWFDataServer(log=_log.debug)
         self._fetch_file(server, reporter, self.override_existing)
 
     def _fetch_file(self, server, reporter, override_existing):
@@ -153,13 +176,27 @@ class EcmwfApiSource(DataSource):
             settings = self._get_api_settings()
             settings["target"] = t
             try:
-                server.retrieve(settings)
-            except URLError as e:
-                _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?", e)
-                return False
+                result = server.retrieve(settings)
+                target_size = os.path.getsize(t)
+                if result['size'] != target_size:
+                    _log.debug('ECMWFDataServer target: %s expected size: %s, actual size: %s',
+                               t, str(result['size']), str(target_size))
+                    return False
+
+            except (URLError) as e:
+                message = "ECMWFDataServer raised %s. Do you have the correct URL in ~/.ecmwfapirc?" % e
+                _log.debug(message)
+                raise RemoteFetchException(
+                    summary='ECMWFDataServer failed to retrieve file. Check ~/.ecmwfapirc file',
+                    detailed='target: {}, message:{}'.format(t, message))
+            except (HTTPException, APIException) as e:
+                message = "ECMWFDataServer raised %s." % e
+                _log.debug(message)
+                raise RemoteFetchException(
+                    summary='ECMWFDataServer failed to retrieve file',
+                    detailed='target: {}, message:{}'.format(t, message))
             except Exception as e:    # pylint: disable=broad-except
-                _log.exception(e)
-                _log.debug("ECMWFDataServer rasied " + str(e))
+                _log.debug("ECMWFDataServer raised " + str(e))
                 return False
             return True
 

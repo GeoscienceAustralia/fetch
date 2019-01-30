@@ -26,6 +26,7 @@ setup(name='fetch',
           'pathlib',
           'pyyaml',
           'requests',
+          'future;python_version<"3"',
       ] + (
           # Setting subprocess names is only support on Linux
           ['setproctitle'] if 'linux' in sys.platform else []

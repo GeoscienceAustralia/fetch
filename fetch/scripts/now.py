@@ -11,13 +11,16 @@ def main():
     """
     Run once for the given rules.
     """
-    if len(sys.argv) < 2:
+    return_usage = any((sys.argv < 2, '-h' in sys.argv, '--help' in sys.argv))
+
+    if return_usage:
         sys.stderr.writelines([
             'Usage: fetch-now <config.yaml> [rules...]\n',
             '',
             'eg. fetch-now rules.yaml LS7_BPF\n'
         ])
         sys.exit(1)
+
     config_location = sys.argv[1]
     rule_names = sys.argv[2:]
 

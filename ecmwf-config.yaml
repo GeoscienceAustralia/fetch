@@ -9,7 +9,7 @@ directory: /home/547/smr547/data/fetch
 
 # Notification settings (for errors):
 notify:
-  email: ['steven.ring@ga.gov.au']
+  email: ['jeremy.hooke@ga.gov.au']
 
 # Message bus config, for announcing arrivals. Optional.
 #  No messaging
@@ -227,7 +227,7 @@ rules:
         stream: "oper"
         time: "12:00:00"
         typ: "an"
-        target: /home/547/smr547/ecmwf_data/invar_geo_potential.grib
+        target: /eoancillarydata/ecmwf_data/invar_geo_potential.grib
 
   Surface Pressure:
     schedule: '0 16 26 * *'
@@ -244,7 +244,7 @@ rules:
         time: "00:00:00"
         step: "0"
         typ: "an"
-        target: /home/547/smr547/ecmwf_data/sp_20050103_to_20050105.grib
+        target: /eoancillarydata/ecmwf_data/sp_20050103_to_20050105.grib
     process: !shell
        command: 'python to_geotiff.py -d {parent_dir} {parent_dir}/{file_stem}.grib'
        expect_file: '{parent_dir}/{file_stem}.tif'
@@ -264,4 +264,4 @@ rules:
         time: "10:00:00"
         step: "0"
         typ: "an"
-        target: /home/547/smr547/ecmwf_data/temperature_20020505.grib
+        target: /eoancillarydata/ecmwf_data/temperature_20020505.grib

@@ -30,6 +30,9 @@ setup(name='fetch',
           # Setting subprocess names is only support on Linux
           ['setproctitle'] if 'linux' in sys.platform else []
       ),
+      extras_require={
+          'ecmwf': ['ecmwf-api-client']
+      },
       entry_points={
           'console_scripts': [
               'fetch-service = fetch.scripts.service:main',

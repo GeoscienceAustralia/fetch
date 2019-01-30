@@ -1,6 +1,6 @@
 ``Fetch`` has a object oriented design which encourages extensibility and plugablity.
 
-To help developers understand the role of each object and the collaboration between objects a class model and 
+To help developers understand the role of each object and the collaboration between objects a class model and
 collaboration diagram have been developed
 
 ## Class Diagram

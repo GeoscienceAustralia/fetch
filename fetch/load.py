@@ -13,7 +13,7 @@ import yaml
 import yaml.resolver
 from croniter import croniter
 
-from . import ftp, http, ecwmf
+from . import ftp, http, ecmwf
 from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
 
@@ -76,6 +76,19 @@ class ScheduledItem(SimpleObject):
             croniter(cron_pattern)
         except ValueError as v:
             raise ValueError('Cron parse error on {!r}: {!r}'.format(name, cron_pattern), v)
+
+    def __gt__(self, other):
+        return (croniter(self.cron_pattern).cur, self.name) > (croniter(other.cron_pattern).cur, other.name)
+
+    def __lt__(self, other):
+        return (croniter(self.cron_pattern).cur, self.name) < (croniter(other.cron_pattern).cur, other.name)
+
+    def __le__(self, other):
+        return (self == other) or self < other
+
+    def __ge__(self, other):
+        return (self == other) or self > other
+
 
     @property
     def sanitized_name(self):
@@ -370,7 +383,7 @@ def _init_yaml_handling():
     add_default_constructor(ftp.FtpSource, '!ftp-files')
     add_default_constructor(ftp.FtpListingSource, '!ftp-directory')
     add_default_constructor(http.HttpPostAction, '!http-post')
-    add_default_constructor(ecwmf.EcmwfApiSource, '!ecmwf-api')
+    add_default_constructor(ecmwf.EcmwfApiSource, '!ecmwf-api')
     add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
     add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
 

@@ -291,3 +291,21 @@ def to_absolute(filename, base_dir):
         return filename
 
     return os.path.normpath(os.path.join(base_dir, filename))
+
+
+def remove_nones(dict_):
+    """
+    Remove fields from the dict whose values are None.
+
+    Returns a new dict.
+    :type dict_: dict
+    :rtype dict
+
+    >>> remove_nones({'a': 4, 'b': None, 'c': None})
+    {'a': 4}
+    >>> sorted(remove_nones({'a': 'a', 'b': 0}).items())
+    [('a', 'a'), ('b', 0)]
+    >>> remove_nones({})
+    {}
+    """
+    return {k: v for k, v in dict_.items() if v is not None}

@@ -16,6 +16,7 @@ from croniter import croniter
 from . import ftp, http, ecmwf
 from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
+from .util import remove_nones
 
 _log = logging.getLogger(__name__)
 
@@ -88,7 +89,6 @@ class ScheduledItem(SimpleObject):
 
     def __ge__(self, other):
         return (self == other) or self > other
-
 
     @property
     def sanitized_name(self):
@@ -200,7 +200,7 @@ class Config(object):
         Convert to simple dict format (expected by our YAML output)
         :return:
         """
-        return _remove_nones({
+        return remove_nones({
             'directory': self.directory,
             'notify': {
                 'email': self.notify_addresses
@@ -209,7 +209,7 @@ class Config(object):
             'messaging': self.messaging_settings,
             'rules': dict([
                 (
-                    r.name, _remove_nones({
+                    r.name, remove_nones({
                         'schedule': r.cron_pattern,
                         'source': r.module,
                         'process': r.process
@@ -218,24 +218,6 @@ class Config(object):
                 for r in self.rules
             ])
         })
-
-
-def _remove_nones(dict_):
-    """
-    Remove fields from the dict whose values are None.
-
-    Returns a new dict.
-    :type dict_: dict
-    :rtype dict
-
-    >>> _remove_nones({'a': 4, 'b': None, 'c': None})
-    {'a': 4}
-    >>> sorted(_remove_nones({'a': 'a', 'b': 0}).items())
-    [('a', 'a'), ('b', 0)]
-    >>> _remove_nones({})
-    {}
-    """
-    return {k: v for k, v in dict_.items() if v is not None}
 
 
 def _load_config_dict(file_io):
@@ -344,7 +326,7 @@ def _init_yaml_handling():
         """
         return dumper.represent_mapping(
             tag,
-            _remove_nones(data.__dict__),
+            remove_nones(data.__dict__),
             flow_style=flow_style
         )
 

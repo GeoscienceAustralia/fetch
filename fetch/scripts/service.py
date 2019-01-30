@@ -12,11 +12,14 @@ def main():
     """
     Run
     """
-    if len(sys.argv) != 2:
+    return_usage = any((sys.argv < 2, '-h' in sys.argv, '--help' in sys.argv))
+
+    if return_usage:
         sys.stderr.writelines([
-            'Usage: fetch-service <config.yaml>\n'
+            'Usage: fetch-service <config.yaml>\n',
         ])
         sys.exit(1)
+
     config_location = sys.argv[1]
 
     from fetch import auto

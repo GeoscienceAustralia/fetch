@@ -7,6 +7,10 @@ import os
 import json
 import logging
 import urllib
+try:
+    from urllib.parse import urlencode
+except:
+    from urllib import urlencode
 
 try:
     from urllib.request import URLError
@@ -14,7 +18,6 @@ except ImportError:
     from urllib2 import URLError
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
-# from .compat import urljoin
 
 _log = logging.getLogger(__name__)
 
@@ -26,11 +29,19 @@ def _rename(the_dict, old, new):
     :type the_dict: dict
     :type old: str
     :type new: str
+
+    >>> _rename({'a': 10}, 'a', 'b')
+    {'b': 10}
+    >>> _rename({'a': 10}, 'c', 'b')
+    {'a': 10}
+    >>> _rename({'a': 5}, 'a', 'a')
+    {'a': 5}
     """
 
-    if new in the_dict:
-        the_dict[new] = the_dict[old]
-        del the_dict[old]
+    if old in the_dict:
+        the_dict[new] = the_dict.pop(old)
+
+    return the_dict
 
 
 def _remove_nones(dict_):
@@ -115,10 +126,10 @@ class EcmwfApiSource(DataSource):
         try:
             with open(os.environ.get("HOME") + "/.ecmwfapirc") as f:
                 d = json.loads(f.read())
-                uri = d["url"]
+                uri = d.get("url", "ecmwfapi://UnknownHost")
         except IOError as e:
             uri = "ecmwfapi://UnknownHost"
-        query = urllib.parse.urlencode(self._get_api_settings())
+        query = urlencode(self._get_api_settings())
         return uri + "?" + query
 
     def trigger(self, reporter):
@@ -147,7 +158,8 @@ class EcmwfApiSource(DataSource):
                 _log.debug("ECMWFDataServer rasied %s. Do you have the correct URL in ~/.ecmwfapirc?", e)
                 return False
             except Exception as e:    # pylint: disable=broad-except
-                _log.debug("ECMWFDataServer rasied " + e)
+                _log.exception(e)
+                _log.debug("ECMWFDataServer rasied " + str(e))
                 return False
             return True
 

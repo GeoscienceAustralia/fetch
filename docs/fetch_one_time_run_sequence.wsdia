@@ -4,7 +4,7 @@
 # to generate the graphical version of this file.
 #
 # A PDF of this diagram is included in the GIT repo
-# 
+#
 
 title fetch: One time run
 
@@ -18,12 +18,12 @@ participant Config as C
 participant ScheduledItem as SI
 participant ScheduledProcess as SP
 participant WrapHandler as WH
-participant DataSource\nEcwmfAPI as DS
+participant DataSource\nEcmwfAPI as DS
 participant Filename\nTransform as FNT
 participant NotifyResultHandler as NRH
 participant Messenger as M
 participant Shell\nFile\nProcessor as SFP
-participant ECWMFServer as S
+participant ECMWFServer as S
 
 
 os->+N: main()
@@ -64,7 +64,7 @@ par
 SP-->+SP: run()\n(via fork()/exec())
 end
 note right of SP
-the run() method executes 
+the run() method executes
 in a child process
 end note
 SP->*WH: create

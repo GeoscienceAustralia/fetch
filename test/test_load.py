@@ -1,4 +1,5 @@
 from __future__ import print_function, absolute_import
+from builtins import str as text
 
 import tempfile
 
@@ -33,7 +34,7 @@ def _check_load_dump_config(make_config):
     config_file_path = Path(tempfile.mkdtemp(prefix='testrun'), 'config.yaml')
     with config_file_path.open(mode='w') as f:
         yaml = load.dump_yaml(original_config)
-        f.write(unicode(yaml))
+        f.write(text(yaml))
     reparsed_config = load.load_yaml(str(config_file_path))
     if make_config() != reparsed_config.to_dict():
         _fail_with_diff(make_config(), reparsed_config.to_dict())
@@ -58,7 +59,7 @@ def test_dump_load_obj_with_messaging():
 
 
 def print_simple_obj_diff(dict1, dict2):
-    if type(dict2) in (int, float, str, unicode):
+    if type(dict2) in (int, float, str, text):
         print('-   {!r}'.format(dict1))
         print('+   {!r}'.format(dict2))
         return

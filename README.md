@@ -156,7 +156,7 @@ the [Python ECMWF API](https://software.ecmwf.int/wiki/display/WEBAPI/Accessing+
 The ECMWF API required properties to be specfied as follows:
 
     source: !ecmwf-api
-        cls: ei             
+        cls: ei
         dataset: interim
         date: 2005-01-03/to/2005-01-05
         area: 0/100/-50/160
@@ -175,11 +175,11 @@ The keys (dataset, date, area, etc) are [MARS keywords](https://software.ecmwf.i
  used to specify various aspects of the data retrieval. Please note that the ``class`` and
 ``type`` keywords have different spelling (``cls`` and ``typ``) to avoid Python compiler name clashes.
 
-Request parameter are complex. ECMWF recommend using the ``View Request Parameters`` feature as you get familiar with 
+Request parameter are complex. ECMWF recommend using the ``View Request Parameters`` feature as you get familiar with
 the [avaiable ECMWF data sets](http://apps.ecmwf.int/datasets/). This
 will assist you in preparing error-free requests.
 
-The ``!ecmwf-api`` datasource supports [Transformers](#transformers) and the ``override_existing`` option (defaults to ``False``). 
+The ``!ecmwf-api`` datasource supports [Transformers](#transformers) and the ``override_existing`` option (defaults to ``False``).
 ``!ecmwf-api`` datasources can also be used with the [!date-range](#!date-range) datasource.
 
 ### Transformers

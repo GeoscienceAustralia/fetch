@@ -9,7 +9,7 @@ To test chages before pushing to [github](http://github.com)
 
 ## Virtual environment
 
-Follow [virtualenvs howto](http://docs.python-guide.org/en/latest/dev/virtualenvs/) instructions 
+Follow [virtualenvs howto](http://docs.python-guide.org/en/latest/dev/virtualenvs/) instructions
 
 ```
 pip install virtualenv --user

@@ -148,7 +148,7 @@ class Uri(object):
         'dev-server'
         >>> Uri.parse('/etc/something.txt').get_hostname()
         ''
-        >>> Uri.parse('something.txt').get_hostname()
+        >>> Uri.parse('something.txt').get_hostname()  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         ...
         UnsupportedUriError: File paths must be absolute paths (start with /). Received: 'something.txt'

@@ -14,21 +14,30 @@ from fetch.ecmwf import (
     HTTPException
 )
 
+@pytest.fixture(scope="module")
+def ecmwf_config_dir(tmpdir_factory):
+    """
+    Writes a minimal config at the provided directory
+    Can only be read if the environment HOME variable is changed to the same directory
+    """
+    base_dir = str(tmpdir_factory.mktemp("test-cfg"))
 
-@mock.patch.dict(os.environ, {'HOME':tempfile.gettempdir()})
-@mock.patch('tempfile.mktemp', return_value='/path/to/fetch/dir-fetch')
-def test_ecmwf_retrieve_serialisation(mktemp_patch):
+    with open(base_dir + '/.ecmwfapirc', 'w') as fd:
+        fd.write(json.dumps({"url": "ecmwfapi://example.com/tests"}))
+
+    return base_dir
+
+
+def test_ecmwf_retrieve_serialisation(ecmwf_config_dir):
     """
     Tests the transformation from config to ecmwf retrieve calls
     """
-    try:
-        tmp_dir = tempfile.mkdtemp()
-        _write_config(tmp_dir)
-        reporter = mock.MagicMock()
-        raw_cfg = _make_ecmwf_config()
-        cfg = Config.from_dict(raw_cfg)
+    reporter = mock.MagicMock()
+    raw_cfg = _make_ecmwf_config()
+    cfg = Config.from_dict(raw_cfg)
 
-        with mock.patch.dict(os.environ,{'HOME':tmp_dir}):
+    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+        with mock.patch('tempfile.mktemp', return_value='/path/to/fetch/dir-fetch'):
             for item in cfg.rules:
                 with mock.patch('fetch.ecmwf.ECMWFDataServer') as MockServer:
                     mock_server = MockServer.return_value
@@ -48,96 +57,77 @@ def test_ecmwf_retrieve_serialisation(mktemp_patch):
                             expected_args[ep] = getattr(raw_cfg['rules'][item.name]['source'], ep)
 
                     mock_server.retrieve.assert_called_once_with(expected_args)
-    finally:
-        shutil.rmtree(tmp_dir)
 
 
-def test_ecmwf_credentials_read():
+def test_ecmwf_credentials_read(tmpdir):
     """
     Tests resolving credentials from the HOME folder
     """
 
-    tmp_dir = tempfile.mkdtemp()
     api_src = EcmwfApiSource()
-    try:
-        with mock.patch.dict(os.environ,{'HOME':tmp_dir}):
-            with pytest.raises(RemoteFetchException):
-                api_src.get_uri()  # no file configured
+    with mock.patch.dict(os.environ, {'HOME':str(tmpdir)}):
+        with pytest.raises(RemoteFetchException):
+            api_src.get_uri()  # no file configured
 
-            _write_config(tmp_dir)
-            assert api_src.get_uri() == 'ecmwfapi://example.com/tests?', "Validate cfg with rc file"
-    finally:
-        shutil.rmtree(tmp_dir)
+        with open(str(tmpdir) + '/.ecmwfapirc', 'w') as fd:
+            fd.write(json.dumps({"url": "ecmwfapi://example.com/tests"}))
 
-
-class Test_EcmwfApiSourceErrors(object):
-
-    @classmethod
-    def setup_class(cls):
-        cls.tmp_dir = tempfile.mkdtemp()
-        _write_config(cls.tmp_dir)
-
-    @classmethod
-    def teardown_class(cls):
-        if hasattr(cls, 'tmp_dir') and cls.tmp_dir:
-            shutil.rmtree(cls.tmp_dir)
-        cls.tmp_dir = None
-
-    def test_raises_remote_fetch_exception(self):
-        reporter = mock.MagicMock()
-        raw_cfg = _make_ecmwf_config(self.tmp_dir)
-
-        cfg = Config.from_dict(raw_cfg)
-        data_source = cfg.rules[0].module
-        with mock.patch.dict(os.environ, {'HOME':self.tmp_dir}):
-            with mock.patch('fetch.ecmwf.ECMWFDataServer') as MockServer:
-                mock_server = MockServer.return_value
-
-                test_exceptions = [
-                    URLError(reason='test exception'),
-                    APIException(),
-                    HTTPException()
-                ]
-
-                for _exc in test_exceptions:
-                    mock_server.retrieve.side_effect = _exc
-                    with pytest.raises(RemoteFetchException):
-                        data_source.trigger(reporter=reporter)
-
-                    # Check no files remain:
-                    for dirpath, dirnames, files in os.walk(self.tmp_dir):
-                        if files and files != ['.ecmwfapirc']:
-                            assert False, "File artifacts left in download directory"
-
-    @mock.patch('os.path.getsize', return_value=500)
-    def test_size(self, getsize_mock):
-        raw_cfg = _make_ecmwf_config(self.tmp_dir)
-        cfg = Config.from_dict(raw_cfg)
-        data_source = cfg.rules[0].module
-
-        # Mock the ECMWFDataServer
-        server = mock.Mock()
-        server.retrieve.return_value = {'size': 600}
-        with mock.patch.dict(os.environ, {'HOME':self.tmp_dir}):
-            data_source._fetch_file(server, mock.MagicMock(), False)
-            # Assert getsize only called once; inside the do_fetch function
-            # defined in fetch/ecmwf.py
-            # This is side effect observable if do_fetch returns False
-            #    signifying the file did not download correctly
-            getsize_mock.assert_called_once()
-
-        for dirpath, dirnames, files in os.walk(self.tmp_dir):
-            if files and files != ['.ecmwfapirc']:
-                assert False, "File artifacts left in download directory"
+        assert api_src.get_uri() == 'ecmwfapi://example.com/tests?', "Validate cfg with rc file"
 
 
-def _write_config(tmp_dir):
+def test_raises_remote_fetch_exception(ecmwf_config_dir):
+    """ Tests that RemoteFetchException is called where the remote 
+        server returns an error
     """
-    Writes a minimal config at the provided directory
-    Can only be read if the environment HOME variable is changed to the same directory
+    reporter = mock.MagicMock()
+    raw_cfg = _make_ecmwf_config(ecmwf_config_dir)
+
+    cfg = Config.from_dict(raw_cfg)
+    data_source = cfg.rules[0].module
+    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+        with mock.patch('fetch.ecmwf.ECMWFDataServer') as MockServer:
+            mock_server = MockServer.return_value
+
+            test_exceptions = [
+                URLError(reason='test exception'),
+                APIException(),
+                HTTPException()
+            ]
+
+            for _exc in test_exceptions:
+                mock_server.retrieve.side_effect = _exc
+                with pytest.raises(RemoteFetchException):
+                    data_source.trigger(reporter=reporter)
+
+    # Check no files remain:
+    for dirpath, dirnames, files in os.walk(ecmwf_config_dir):
+        if files and files != ['.ecmwfapirc']:
+            assert False, "File artifacts left in download directory"
+
+
+@mock.patch('os.path.getsize', return_value=500)
+def test_size(getsize_mock, ecmwf_config_dir):
+    """ Tests that files are removed if the size returned 
+        during sync is inconsistent
     """
-    with open(tmp_dir + '/.ecmwfapirc', 'w') as fd:
-        fd.write(json.dumps({"url": "ecmwfapi://example.com/tests"}))
+    raw_cfg = _make_ecmwf_config(ecmwf_config_dir)
+    cfg = Config.from_dict(raw_cfg)
+    data_source = cfg.rules[0].module
+
+    # Mock the ECMWFDataServer
+    server = mock.Mock()
+    server.retrieve.return_value = {'size': 600}
+    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+        data_source._fetch_file(server, mock.MagicMock(), False)
+        # Assert getsize only called once; inside the do_fetch function
+        # defined in fetch/ecmwf.py
+        # This is side effect observable if do_fetch returns False
+        #    signifying the file did not download correctly
+        getsize_mock.assert_called_once()
+
+    for dirpath, dirnames, files in os.walk(ecmwf_config_dir):
+        if files and files != ['.ecmwfapirc']:
+            assert False, "File artifacts left in download directory"
 
 
 def _make_ecmwf_config(ancillary_data_root='/tmp/anc'):

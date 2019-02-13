@@ -11,7 +11,7 @@ def main():
     """
     Run once for the given rules.
     """
-    return_usage = any((sys.argv < 2, '-h' in sys.argv, '--help' in sys.argv))
+    return_usage = any((len(sys.argv) < 2, '-h' in sys.argv, '--help' in sys.argv))
 
     if return_usage:
         sys.stderr.writelines([

@@ -19,6 +19,24 @@ DEFAULT_CONNECT_TIMEOUT_SECS = 100
 _log = logging.getLogger(__name__)
 
 
+class SessionWithRedirection(requests.Session):
+    """
+    Enables authentication headers to be retained for configured hosts
+    """
+
+    TRUSTED_HOSTS = ['urs.earthdata.nasa.gov']
+
+    def should_strip_auth(self, old_url, new_url):
+        original_parsed = requests.utils.urlparse(old_url)
+        redirect_parsed = requests.utils.urlparse(new_url)
+
+        if original_parsed.hostname in self.TRUSTED_HOSTS or \
+                redirect_parsed.hostname in self.TRUSTED_HOSTS:
+            return False
+        return super(SessionWithRedirection, self).should_strip_auth(old_url, new_url)
+
+
+
 def filename_from_url(url):
     """
     Get the filename component of the URL
@@ -53,6 +71,22 @@ class HttpPostAction(SimpleObject):
         :type session: requests.Session
         """
         return closing(session.post(self.url, params=self.params))
+
+
+class HttpAuthAction(SimpleObject):
+    """
+    Performs authentication for the session provided.
+    """
+
+    def __init__(self, url, username, password):
+        self.url = url
+        self.params = (username, password)
+
+    def get_result(self, session):
+        url = session.request('get', self.url).url
+
+        session.auth = self.params
+        return closing(session.get(url, auth=self.params))
 
 
 class _HttpBaseSource(DataSource):
@@ -112,7 +146,7 @@ class _HttpBaseSource(DataSource):
         if not all_urls:
             raise RuntimeError("HTTP type requires either 'url' or 'urls'.")
 
-        session = requests.session()
+        session = SessionWithRedirection()
 
         if self.beforehand:
             _log.debug('Triggering %r', self.beforehand)
@@ -120,7 +154,6 @@ class _HttpBaseSource(DataSource):
                 if res.status_code != 200:
                     _log.error('Status code %r received for %r.', res.status_code, self.beforehand)
                     _log.debug('Error received text: %r', res.text)
-
         for url in all_urls:
             _log.debug("Triggering %r", url)
             self.trigger_url(reporter, session, url)

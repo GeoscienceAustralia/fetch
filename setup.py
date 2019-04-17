@@ -25,7 +25,7 @@ setup(name='fetch',
           'lxml',
           'pathlib',
           'pyyaml',
-          'requests',
+          'requests>=2.21.0',
           'future;python_version<"3"',
       ] + (
           # Setting subprocess names is only support on Linux

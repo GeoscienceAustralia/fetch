@@ -24,7 +24,7 @@ setup(name='fetch',
           'feedparser',
           'lxml',
           'pathlib;python_version<"3.4"',
-          'pyyaml',
+          'pyyaml<5.1',
           'requests>=2.21.0',
           'future;python_version<"3"',
       ] + (

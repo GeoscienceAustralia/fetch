@@ -36,7 +36,6 @@ class SessionWithRedirection(requests.Session):
         return super(SessionWithRedirection, self).should_strip_auth(old_url, new_url)
 
 
-
 def filename_from_url(url):
     """
     Get the filename component of the URL

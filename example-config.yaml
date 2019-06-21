@@ -264,3 +264,25 @@ rules:
         step: "0"
         typ: "an"
         target: /eoancillarydata/ecmwf_data/temperature_20020505.grib
+#
+#-------------------------------------------------
+# Examples Modis BRDF fetch using authentication |
+#-------------------------------------------------
+#
+  Modis BRDF:
+    schedule: '10 10 * * *'
+    source: !date-range
+      # Download from one day ago (-1) to tomorrow (1):
+      start_day: -14
+      end_day: -7
+      overridden_properties:
+        url: https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.006/{year}.{month}.{day}
+        target_dir: /eoancillarydata/BRDF/MCD43A1.006/{year}.{month}.{day}
+      using: !http-directory
+        url: ''
+        target_dir: ''
+        name_pattern: 'MCD43A1\.A[0-9]{7}\.h(2[7-9]|3[0-2])v(09|1[0-3])\.006\.[0-9]{13}\.hdf'
+        beforehand: !http-auth
+          url: https://urs.earthdata.nasa.gov
+          username: australia
+          password: fake-password

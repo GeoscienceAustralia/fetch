@@ -303,7 +303,7 @@ class Schedule(object):
 
     def __init__(self, items):
         """
-        :type items: list of ScheduledItem
+        :type items: list[ScheduledItem]
         """
         self.schedule = []
         now = time.time()

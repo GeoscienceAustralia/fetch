@@ -158,7 +158,7 @@ class FtpListingSource(DataSource):
     Download files matching a pattern in an FTP directory.
     """
 
-    def __init__(self, hostname, source_dir, name_pattern, target_dir):
+    def __init__(self, hostname, source_dir, name_pattern, target_dir, filename_transform=None):
         """
         :type source_urls: list of str
         :type target_dir: str
@@ -170,6 +170,7 @@ class FtpListingSource(DataSource):
         self.source_dir = source_dir
         self.name_pattern = name_pattern
         self.target_dir = target_dir
+        self.filename_transform = filename_transform
 
     def trigger(self, reporter):
         """
@@ -209,5 +210,6 @@ class FtpListingSource(DataSource):
             self.target_dir,
             reporter,
             get_files,
-            override_existing=True
+            override_existing=True,
+            filename_transform=self.filename_transform
         )

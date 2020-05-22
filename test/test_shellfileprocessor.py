@@ -1,5 +1,7 @@
-from fetch._core import ShellFileProcessor
+
 import os
+from fetch._core import RegexpOutputPathTransform
+from fetch._core import ShellFileProcessor
 
 def test_shellfilepro():
     command = 'ls'
@@ -13,7 +15,16 @@ def test_shellfilepro():
 
     # Use this great function
     # RegexpOutputPathTransform
+    t = RegexpOutputPathTransform('LS8_(?P<year>\\d{4})')
+    print(t.transform_output_path('/tmp/out/{year}', 'LS8_2003'))
 
+    t = RegexpOutputPathTransform(r'LS8_(?P<year>\d{4})')
+    print(t.transform_output_path('/tmp/out/{year}', 'LS8_2003'))
 
+    t = RegexpOutputPathTransform(r'^(?P<base>test.+)\.py$')
+    print(t.transform_output_path('/tmp/out/{base}.pyc', 'test_shell.py'))
+
+    t = RegexpOutputPathTransform('^(?P<base>test.+)\\.py$')
+    print(t.transform_output_path('/tmp/out/{base}.pyc', 'test_shell.py'))
 if __name__ == '__main__':
     test_shellfilepro()

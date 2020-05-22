@@ -556,10 +556,11 @@ class ShellFileProcessor(FileProcessor):
     :type command: str
     """
 
-    def __init__(self, command=None, expect_file=None):
+    def __init__(self, command=None, expect_file=None, required_files=None):
         super(ShellFileProcessor, self).__init__()
         self.command = command
         self.expect_file = expect_file
+        self.required_files = required_files
 
     def _apply_file_pattern(self, pattern, file_path):
         """

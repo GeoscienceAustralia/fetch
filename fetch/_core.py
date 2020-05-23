@@ -170,7 +170,7 @@ class RegexpOutputPathTransform(FilenameTransform):
     def transform_output_path(self, output_path, source_filename):
         """
 
-        :param path:
+        :param output_path:
         :param source_filename:
 
         >>> t = RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})')
@@ -600,7 +600,20 @@ class ShellFileProcessor(FileProcessor):
         :rtype: str
         :raises: FileProcessError
         """
-        command = self._apply_file_pattern(self.command, file_path)
+        command = self.command
+        if self.required_files:
+            path_transform = RegexpOutputPathTransform(self.required_files(0))
+            if not all([os.path.isfile(path_transform.transform_output_path(f, file_path)) \
+                        for f in self.required_files(1)]):
+                _log.info('Not all of the required_files are present.')
+                # what is expected path used for? This will break it :)
+                return None
+            else:
+                # format the path based on the group from
+                # transform output path
+                # command = path_transform.transform_output_path(command)
+                pass
+        command = self._apply_file_pattern(command, file_path)
         _log.info('Running %r', command)
 
         # Trigger command

@@ -26,5 +26,10 @@ def test_shellfilepro():
 
     t = RegexpOutputPathTransform('^(?P<base>test.+)\\.py$')
     print(t.transform_output_path('/tmp/out/{base}.pyc', 'test_shell.py'))
+
+
+    t = RegexpOutputPathTransform(r'^(?P<base>.*test.+)\.py$')
+    print(t.transform_output_path('{base}.py', '/yeah/test_shell.py'))
+
 if __name__ == '__main__':
     test_shellfilepro()

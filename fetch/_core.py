@@ -166,6 +166,7 @@ class RegexpOutputPathTransform(FilenameTransform):
             raise
 
         self.pattern = pattern
+        self.groups = {}
 
     def transform_output_path(self, output_path, source_filename):
         """
@@ -186,9 +187,8 @@ class RegexpOutputPathTransform(FilenameTransform):
             _log.info('No regexp match for %r', output_path)
             return output_path
 
-        groups = m.groupdict()
-
-        return output_path.format(**groups)
+        self.groups = m.groupdict()
+        return output_path.format(**self.groups)
 
 
 class DateFilenameTransform(FilenameTransform):
@@ -562,9 +562,10 @@ class ShellFileProcessor(FileProcessor):
         self.expect_file = expect_file
         self.required_files = required_files
 
-    def _apply_file_pattern(self, pattern, file_path):
+    def _apply_file_pattern(self, pattern, file_path, **keywords):
         """
         Format the given pattern.
+        :type file_path: str
 
         :rtype: str
 
@@ -591,7 +592,8 @@ class ShellFileProcessor(FileProcessor):
             parent_dirs=[str(p) for p in path.parents],
 
             # A more flexible alternative to the above.
-            path=path
+            path=path,
+            **keywords
         )
 
     def process(self, file_path):
@@ -602,9 +604,9 @@ class ShellFileProcessor(FileProcessor):
         """
         command = self.command
         if self.required_files:
-            path_transform = RegexpOutputPathTransform(self.required_files(0))
+            path_transform = RegexpOutputPathTransform(self.required_files[0])
             if not all([os.path.isfile(path_transform.transform_output_path(f, file_path)) \
-                        for f in self.required_files(1)]):
+                        for f in self.required_files[1]]):
                 _log.info('Not all of the required_files are present.')
                 # what is expected path used for? This will break it :)
                 return None
@@ -612,8 +614,10 @@ class ShellFileProcessor(FileProcessor):
                 # format the path based on the group from
                 # transform output path
                 # command = path_transform.transform_output_path(command)
-                pass
-        command = self._apply_file_pattern(command, file_path)
+                required_files_formating = path_transform.groups
+        else:
+            required_files_formating = {}
+        command = self._apply_file_pattern(command, file_path, **required_files_formating)
         _log.info('Running %r', command)
 
         # Trigger command

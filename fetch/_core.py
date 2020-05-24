@@ -608,8 +608,9 @@ class ShellFileProcessor(FileProcessor):
             if not all([os.path.isfile(path_transform.transform_output_path(f, file_path)) \
                         for f in self.required_files[1]]):
                 _log.info('Not all of the required_files are present.')
-                # what is expected path used for? This will break it :)
-                return None
+                # what is expected path used for?
+                # It seems like reporting, so it is returning the file_path
+                return file_path
             else:
                 # format the path based on the group from
                 # transform output path

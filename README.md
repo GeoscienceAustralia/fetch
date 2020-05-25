@@ -277,13 +277,20 @@ For example, use gdal to convert each downloaded file from NetCDF (`*.nc`) to Ti
      process: !shell
         command: 'gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{filename} {parent_dir}/{file_stem}.tif'
         expect_file: '{parent_dir}/{file_stem}.tif'
+        required_files:('^(?P<base>.*hdf)', ['{base}', '{base}.xml'])
 
 Where:
 
 - `command:` is the shell command to run
 - `expect_file:` is the full path to an output file. (To allow fetch daemon to track newly added files)
+- `required_files:` Specify the a list of files needed before running the shell command.
+This is useful when there are sidecar files.
+The value format is a tuple where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'` 
+This is applied to and full name of the downloaded file and used to create named groups used in the second element.
+The second element is a list of files that must be present before the shell command is executed.
 
-Both fields are evaluated with [python string formatting](https://docs.python.org/2/library/string.html#formatstrings),
+
+Both `command:` and `expect_file:` are evaluated with [python string formatting](https://docs.python.org/2/library/string.html#formatstrings),
  supporting the following fields:
 
     # Full name of file (eg. 'pr_wtr.eatm.2014.nc')
@@ -294,6 +301,8 @@ Both fields are evaluated with [python string formatting](https://docs.python.or
     {file_stem}
     # Directory ('/data/fetch/eoancil-test/water_vapour/source')
     {parent_dir}
+ `command:` and the list of files in `required_files:` are also evaluated with the named groups found in the `required_files:` pattern.
+
 
 ## Signals:
 

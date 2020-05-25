@@ -605,7 +605,7 @@ class ShellFileProcessor(FileProcessor):
         command = self.command
         if self.required_files:
             path_transform = RegexpOutputPathTransform(self.required_files[0])
-            if not all([os.path.isfile(path_transform.transform_output_path(f, file_path)) \
+            if not all([os.path.isfile(path_transform.transform_output_path(f, file_path))
                         for f in self.required_files[1]]):
                 _log.info('Not all of the required_files are present.')
                 # what is expected path used for?

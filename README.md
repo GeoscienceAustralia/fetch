@@ -286,7 +286,7 @@ Where:
 - `required_files:` Specify the a list of files needed before running the shell command.
 This is useful when there are sidecar files.
 The value format is a tuple where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'` 
-This is applied to and full name of the downloaded file and used to create named groups used in the second element.
+This is applied to the full name of the downloaded file and used to create named groups used in the second element.
 The second element is a list of files that must be present before the shell command is executed.
 
 

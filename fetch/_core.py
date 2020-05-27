@@ -166,7 +166,7 @@ class RegexpOutputPathTransform(FilenameTransform):
             raise
 
         self.pattern = pattern
-        self.groups = {}
+        self.last_matched_groups = {}
 
     def transform_output_path(self, output_path, source_filename):
         """
@@ -187,8 +187,8 @@ class RegexpOutputPathTransform(FilenameTransform):
             _log.info('No regexp match for %r', output_path)
             return output_path
 
-        self.groups = m.groupdict()
-        return output_path.format(**self.groups)
+        self.last_matched_groups = m.groupdict()
+        return output_path.format(**self.last_matched_groups)
 
 
 class DateFilenameTransform(FilenameTransform):
@@ -556,11 +556,11 @@ class ShellFileProcessor(FileProcessor):
     :type command: str
     """
 
-    def __init__(self, command=None, expect_file=None, required_files=None):
+    def __init__(self, command=None, expect_file=None, input_files=None):
         super(ShellFileProcessor, self).__init__()
         self.command = command
         self.expect_file = expect_file
-        self.required_files = required_files
+        self.input_files = input_files
 
     def _apply_file_pattern(self, pattern, file_path, **keywords):
         """
@@ -578,6 +578,8 @@ class ShellFileProcessor(FileProcessor):
         '/tmp'
         >>> p._apply_file_pattern('{parent_dirs[1]}', '/tmp/something.txt')
         '/'
+        >>> p._apply_file_pattern('{base}.hdf', '/tmp/something.hdf',**{'base':'/tmp/something'})
+        '/tmp/something.hdf'
         """
         path = Path(file_path)
         return pattern.format(
@@ -603,19 +605,18 @@ class ShellFileProcessor(FileProcessor):
         :raises: FileProcessError
         """
         command = self.command
-        if self.required_files:
-            path_transform = RegexpOutputPathTransform(self.required_files[0])
+        if self.input_files:
+            path_transform = RegexpOutputPathTransform(self.input_files[0])
             if not all([os.path.isfile(path_transform.transform_output_path(f, file_path))
-                        for f in self.required_files[1]]):
+                        for f in self.input_files[1]]):
                 _log.info('Not all of the required_files are present.')
-                # what is expected path used for?
-                # It seems like reporting, so it is returning the file_path
+                # This is used for reporting, so it is returning the file_path.
                 return file_path
             else:
                 # format the path based on the group from
                 # transform output path
                 # command = path_transform.transform_output_path(command)
-                required_files_formating = path_transform.groups
+                required_files_formating = path_transform.last_matched_groups
         else:
             required_files_formating = {}
         command = self._apply_file_pattern(command, file_path, **required_files_formating)

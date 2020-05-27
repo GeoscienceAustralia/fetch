@@ -19,3 +19,7 @@ def test_shellfilepro_required_files_not_there():
     results = sfp.process(file_path)
     # A rather toothless assert given required_files_there would return the same result...
     assert file_path == results
+    # Future option is to ask for a tmp_path, and make your command touch {tmp_path / 'test_file.txt'}.
+    # Then if the file exists, you know the command was run. It could work in both tests.
+
+# Add a test when no required_files parameter is supplied at all

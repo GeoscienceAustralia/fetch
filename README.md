@@ -290,8 +290,8 @@ This is applied to the full name of the downloaded file and used to create named
 The second element is a list of files that must be present before the shell command is executed.
 
 
-Both `command:` and `expect_file:` are evaluated with [python string formatting](https://docs.python.org/3/library/string.html#formatstrings),
- supporting the following fields:
+Both `command:`, the list of files in `input_files:` and `expect_file:` are evaluated with [python string formatting](https://docs.python.org/3/library/string.html#formatstrings),
+ supporting the following fields as well as being evaluated with the named groups found in the `input_files:` pattern:
 
     # Full name of file (eg. 'pr_wtr.eatm.2014.nc')
     {filename}
@@ -301,7 +301,6 @@ Both `command:` and `expect_file:` are evaluated with [python string formatting]
     {file_stem}
     # Directory ('/data/fetch/eoancil-test/water_vapour/source')
     {parent_dir}
- `command:` and the list of files in `input_files:` are also evaluated with the named groups found in the `input_files:` pattern.
 
 
 ## Signals:

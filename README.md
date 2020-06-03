@@ -277,17 +277,11 @@ For example, use gdal to convert each downloaded file from NetCDF (`*.nc`) to Ti
      process: !shell
         command: 'gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{filename} {parent_dir}/{file_stem}.tif'
         expect_file: '{parent_dir}/{file_stem}.tif'
-        input_files:('^(?P<base>.*hdf)', ['{base}', '{base}.xml'])
 
 Where:
 
 - `command:` is the shell command to run
 - `expect_file:` is the full path to an output file. (To allow fetch daemon to track newly added files)
-- `input_files:` Specify the a list of files needed before running the shell command.
-This is useful when there are sidecar files.
-The value format is a tuple where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'` 
-This is applied to the full name of the downloaded file and used to create named groups used in the second element.
-The second element is a list of files that must be present before the shell command is executed.
 
 
 Both `command:`, the list of files in `input_files:` and `expect_file:` are evaluated with [python string formatting](https://docs.python.org/3/library/string.html#formatstrings),
@@ -301,6 +295,41 @@ Both `command:`, the list of files in `input_files:` and `expect_file:` are eval
     {file_stem}
     # Directory ('/data/fetch/eoancil-test/water_vapour/source')
     {parent_dir}
+
+
+A more complex example involving sidecar files requiring download but to be treated as a single group when a post-download process is to take place:
+
+    MODIS BRDF:
+      schedule: '10/10 * * * *'
+      source: !date-range
+        # Download from one day ago (-1) to tomorrow (1):
+        start_day: -20 
+        end_day: -10 
+        overridden_properties:
+          url: https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.006/{year}.{month}.{day}
+          target_dir: /tmp/data/BRDF/MCD43A1.006/{year}.{month}.{day}
+        using: !http-directory
+          url: ''
+          target_dir: ''
+          name_pattern: 'MCD43A1\.A[0-9]{7}\.h(2[7-9]|3[0-2])v(09|1[0-3])\.006\.[0-9]{13}\.hdf'
+          beforehand: !http-auth
+            url: https://urs.earthdata.nasa.gov
+            username: <username>
+            password: <password>
+          process: !shell
+            command: 'swfo-convert mcd43a1 h5-md --fname {brdf_base}/{collection}/{ymd}/{basename}{hdf_ext} --outdir /tmp/data/conversion/BRDF/{collection}/{ymd}/ --filter-opts ''{{"aggression": 6}}'' --compression BLOSC_ZSTANDARD'
+            input_files: ['^(?P<brdf_base>.*BRDF)/(?P<collection>.*)/(?P<ymd>[0-9]{4}\.[0-9]{2}\.[0-9]{2})/(?P<basename>.*)(?P<hdf_ext>.hdf)(?P<xml_ext>.xml)?', ['{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}', '{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}.xml']]
+            expect_file: '/tmp/data/conversion/BRDF/{collection}/{ymd}/{basename}.h5'
+
+Where:
+
+- `command:` is the shell command to run
+- `input_files:` contains a regex pattern, and list of expected files that are to be checked before running the post-process command
+- `expect_file:` is the full path to an output file. (To allow fetch daemon to track newly added files)
+This is useful when there are sidecar files.
+The value format is a list where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'` 
+This is applied to the full name of the downloaded file and used to create named groups used in the second element.
+The second element is a list of files that must be present before the shell command is executed.
 
 
 ## Signals:

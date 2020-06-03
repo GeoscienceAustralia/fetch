@@ -316,10 +316,10 @@ A more complex example involving sidecar files requiring download but to be trea
             url: https://urs.earthdata.nasa.gov
             username: <username>
             password: <password>
-          process: !shell
-            command: 'swfo-convert mcd43a1 h5-md --fname {brdf_base}/{collection}/{ymd}/{basename}{hdf_ext} --outdir /tmp/data/conversion/BRDF/{collection}/{ymd}/ --filter-opts ''{{"aggression": 6}}'' --compression BLOSC_ZSTANDARD'
-            input_files: ['^(?P<brdf_base>.*BRDF)/(?P<collection>.*)/(?P<ymd>[0-9]{4}\.[0-9]{2}\.[0-9]{2})/(?P<basename>.*)(?P<hdf_ext>.hdf)(?P<xml_ext>.xml)?', ['{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}', '{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}.xml']]
-            expect_file: '/tmp/data/conversion/BRDF/{collection}/{ymd}/{basename}.h5'
+      process: !shell
+        command: 'swfo-convert mcd43a1 h5-md --fname {brdf_base}/{collection}/{ymd}/{basename}{hdf_ext} --outdir /tmp/data/conversion/BRDF/{collection}/{ymd}/ --filter-opts ''{{"aggression": 6}}'' --compression BLOSC_ZSTANDARD'
+        input_files: ['^(?P<brdf_base>.*BRDF)/(?P<collection>.*)/(?P<ymd>[0-9]{4}\.[0-9]{2}\.[0-9]{2})/(?P<basename>.*)(?P<hdf_ext>.hdf)(?P<xml_ext>.xml)?', ['{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}', '{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}.xml']]
+        expect_file: '/tmp/data/conversion/BRDF/{collection}/{ymd}/{basename}.h5'
 
 Where:
 

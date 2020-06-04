@@ -269,7 +269,7 @@ rules:
 # Examples Modis BRDF fetch using authentication |
 #-------------------------------------------------
 #
-  Modis BRDF:
+  MODIS BRDF:
     schedule: '10 10 * * *'
     source: !date-range
       # Download from one day ago (-1) to tomorrow (1):
@@ -286,3 +286,7 @@ rules:
           url: https://urs.earthdata.nasa.gov
           username: australia
           password: fake-password
+    process: !shell
+      command: 'swfo-convert mcd43a1 h5-md --fname {brdf_base}/{collection}/{ymd}/{basename}{hdf_ext} --outdir /tmp/data/conversion/BRDF/{collection}/{ymd}/ --filter-opts ''{{"aggression": 6}}'' --compression BLOSC_ZSTANDARD'
+      input_files: ['^(?P<brdf_base>.*BRDF)/(?P<collection>.*)/(?P<ymd>[0-9]{4}\.[0-9]{2}\.[0-9]{2})/(?P<basename>.*)(?P<hdf_ext>.hdf)(?P<xml_ext>.xml)?', ['{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}', '{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}.xml']]
+      expect_file: '/tmp/data/conversion/BRDF/{collection}/{ymd}/{basename}.h5'

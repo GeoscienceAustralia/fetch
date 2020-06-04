@@ -166,11 +166,12 @@ class RegexpOutputPathTransform(FilenameTransform):
             raise
 
         self.pattern = pattern
+        self.last_matched_groups = {}
 
     def transform_output_path(self, output_path, source_filename):
         """
 
-        :param path:
+        :param output_path:
         :param source_filename:
 
         >>> t = RegexpOutputPathTransform(r'LS8_(?P<year>\\d{4})')
@@ -186,9 +187,8 @@ class RegexpOutputPathTransform(FilenameTransform):
             _log.info('No regexp match for %r', output_path)
             return output_path
 
-        groups = m.groupdict()
-
-        return output_path.format(**groups)
+        self.last_matched_groups = m.groupdict()
+        return output_path.format(**self.last_matched_groups)
 
 
 class DateFilenameTransform(FilenameTransform):
@@ -556,14 +556,16 @@ class ShellFileProcessor(FileProcessor):
     :type command: str
     """
 
-    def __init__(self, command=None, expect_file=None):
+    def __init__(self, command=None, expect_file=None, input_files=None):
         super(ShellFileProcessor, self).__init__()
         self.command = command
         self.expect_file = expect_file
+        self.input_files = input_files
 
-    def _apply_file_pattern(self, pattern, file_path):
+    def _apply_file_pattern(self, pattern, file_path, **keywords):
         """
         Format the given pattern.
+        :type file_path: str
 
         :rtype: str
 
@@ -576,6 +578,8 @@ class ShellFileProcessor(FileProcessor):
         '/tmp'
         >>> p._apply_file_pattern('{parent_dirs[1]}', '/tmp/something.txt')
         '/'
+        >>> p._apply_file_pattern('{base}.hdf', '/tmp/something.hdf',**{'base':'/tmp/something'})
+        '/tmp/something.hdf'
         """
         path = Path(file_path)
         return pattern.format(
@@ -590,7 +594,8 @@ class ShellFileProcessor(FileProcessor):
             parent_dirs=[str(p) for p in path.parents],
 
             # A more flexible alternative to the above.
-            path=path
+            path=path,
+            **keywords
         )
 
     def process(self, file_path):
@@ -599,7 +604,22 @@ class ShellFileProcessor(FileProcessor):
         :rtype: str
         :raises: FileProcessError
         """
-        command = self._apply_file_pattern(self.command, file_path)
+        command = self.command
+        if self.input_files:
+            path_transform = RegexpOutputPathTransform(self.input_files[0])
+            if not all([os.path.isfile(path_transform.transform_output_path(f, file_path))
+                        for f in self.input_files[1]]):
+                _log.info('Not all of the required_files are present.')
+                # This is used for reporting, so it is returning the file_path.
+                return file_path
+            else:
+                # format the path based on the group from
+                # transform output path
+                # command = path_transform.transform_output_path(command)
+                required_files_formating = path_transform.last_matched_groups
+        else:
+            required_files_formating = {}
+        command = self._apply_file_pattern(command, file_path, **required_files_formating)
         _log.info('Running %r', command)
 
         # Trigger command
@@ -608,7 +628,7 @@ class ShellFileProcessor(FileProcessor):
             raise FileProcessError('Return code %r from command %r' % (returned, command))
 
         # Check that output exists
-        expected_path = self._apply_file_pattern(self.expect_file, file_path)
+        expected_path = self._apply_file_pattern(self.expect_file, file_path, **required_files_formating)
 
         if not os.path.exists(expected_path):
             raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))

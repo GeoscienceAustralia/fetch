@@ -290,3 +290,21 @@ rules:
       command: 'swfo-convert mcd43a1 h5-md --fname {brdf_base}/{collection}/{ymd}/{basename}{hdf_ext} --outdir /tmp/data/conversion/BRDF/{collection}/{ymd}/ --filter-opts ''{{"aggression": 6}}'' --compression BLOSC_ZSTANDARD'
       input_files: ['^(?P<brdf_base>.*BRDF)/(?P<collection>.*)/(?P<ymd>[0-9]{4}\.[0-9]{2}\.[0-9]{2})/(?P<basename>.*)(?P<hdf_ext>.hdf)(?P<xml_ext>.xml)?', ['{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}', '{brdf_base}/{collection}/{ymd}/{basename}{hdf_ext}.xml']]
       expect_file: '/tmp/data/conversion/BRDF/{collection}/{ymd}/{basename}.h5'
+
+#
+#-------------------------------
+# Example using the OpenSearch API |
+#-------------------------------
+#
+  RESORB:
+    schedule: '0 */6 * * *'
+    source: !opensearch-api
+      username: <username>
+      password: <password>
+      api_url: https://scihub.copernicus.eu/gnss
+      query:
+        platformname: Sentinel-1
+        producttype: AUX_RESORB
+        generationdate: '[NOW-5DAYS TO NOW]'
+      filename_transform: !regexp-extract '(?P<platform>S1[A,B]{1})_[A-Z].*_[A-Z].*_(?P<product>[A-Z].*)_[A-Z].*_(?P<creation_date>[0-9,T]{15})_V(?P<valid_start_date>[0-9,T]{15})_(?P<valid_stop_date>[0-9,T]{15}).EOF'
+      target_dir: /tmp/data/sensor-specific/Sentinel-1/{product}/{platform}

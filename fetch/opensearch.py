@@ -15,7 +15,8 @@ class OpenSearchApiSource(DataSource):
     Class for data retrievals using the OpenSearch API.
     """
 
-    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False, timeout=None, filename_transform=None, override_existing=False):
+    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False, timeout=None,
+                 filename_transform=None, override_existing=False):
         self.target_dir = target_dir
         self.filename_transform = filename_transform
         self.override_existing = override_existing
@@ -35,21 +36,24 @@ class OpenSearchApiSource(DataSource):
 
         query_results = self.api.query(**self.query)
 
-        for (key, result) in query_results.items():
-            _log.info('Found %s with uuid %s', result['filename'], key)
+        for (uuid, result) in query_results.items():
+            _log.info('Found %s with uuid %s', result['filename'], uuid)
 
-            def opensearch_fetch(target):
-                download = self.api.download(key)
+            def create_fetch_function(key):
+                def opensearch_fetch(target):
+                    download = self.api.download(key)
 
-                # Workaround for fixed filename
-                _log.debug('Renaming %s to %s', download['path'], target)
-                os.rename(download['path'], target)
+                    # Workaround for fixed filename
+                    _log.debug('Renaming %s to %s', download['path'], target)
+                    os.rename(download['path'], target)
 
-                return True
+                    return True
+
+                return opensearch_fetch
 
             fetch_file(
                 result['link'].replace("'", '%27'),
-                opensearch_fetch,
+                create_fetch_function(uuid),
                 reporter,
                 os.path.basename(result['filename']),
                 self.target_dir,

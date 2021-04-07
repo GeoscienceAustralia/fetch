@@ -13,7 +13,7 @@ import yaml
 import yaml.resolver
 from croniter import croniter
 
-from . import ftp, http, ecmwf
+from . import ftp, http, ecmwf, opensearch
 from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
     RsyncMirrorSource, SimpleObject, ShellFileProcessor
 from .util import remove_nones
@@ -367,6 +367,7 @@ def _init_yaml_handling():
     add_default_constructor(http.HttpPostAction, '!http-post')
     add_default_constructor(http.HttpAuthAction, '!http-auth')
     add_default_constructor(ecmwf.EcmwfApiSource, '!ecmwf-api')
+    add_default_constructor(opensearch.OpenSearchApiSource, '!opensearch-api')
     add_item_constructor(RegexpOutputPathTransform, '!regexp-extract', 'pattern')
     add_item_constructor(DateFilenameTransform, '!date-pattern', 'format_')
 

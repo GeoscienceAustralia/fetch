@@ -7,6 +7,8 @@ from sentinelsat import SentinelAPI
 
 from ._core import DataSource, fetch_file
 
+DEFAULT_CONNECT_TIMEOUT_SECS = 100
+
 _log = logging.getLogger(__name__)
 
 
@@ -15,7 +17,7 @@ class OpenSearchApiSource(DataSource):
     Class for data retrievals using the OpenSearch API.
     """
 
-    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False, timeout=None,
+    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False, timeout=DEFAULT_CONNECT_TIMEOUT_SECS,
                  filename_transform=None, override_existing=False):
         self.target_dir = target_dir
         self.filename_transform = filename_transform

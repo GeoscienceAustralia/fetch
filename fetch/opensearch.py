@@ -17,8 +17,8 @@ class OpenSearchApiSource(DataSource):
     Class for data retrievals using the OpenSearch API.
     """
 
-    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False, timeout=DEFAULT_CONNECT_TIMEOUT_SECS,
-                 filename_transform=None, override_existing=False):
+    def __init__(self, target_dir, api_url, username, password, query, show_progressbars=False,
+                 timeout=DEFAULT_CONNECT_TIMEOUT_SECS, filename_transform=None, override_existing=False):
         self.target_dir = target_dir
         self.filename_transform = filename_transform
         self.override_existing = override_existing

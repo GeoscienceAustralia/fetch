@@ -77,15 +77,29 @@ class HttpAuthAction(SimpleObject):
     Performs authentication for the session provided.
     """
 
-    def __init__(self, url, username, password):
+    def __init__(self, url, username, password,
+                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
         self.url = url
         self.params = (username, password)
+        self.connection_timeout = connection_timeout
 
     def get_result(self, session):
-        url = session.request('get', self.url).url
+        # This was uncommented,
+        # but I think it is asking for a redirect to the login page?
+        login_url = session.request('get', self.url, timeout=self.connection_timeout).url
 
         session.auth = self.params
-        return closing(session.get(url, auth=self.params))
+
+        res = session.get(login_url, auth=self.params, timeout=self.connection_timeout)
+        if res.status_code != 200:
+            # We don't bother with reporter.file_error() as this initial fetch is critical.
+            # Throw an exception instead.
+            raise RemoteFetchException(
+                "Status code %r" % res.status_code,
+                '{url}\n\n{body}'.format(url=login_url, body=res.text)
+            )
+
+        return closing(res)
 
 
 class _HttpBaseSource(DataSource):

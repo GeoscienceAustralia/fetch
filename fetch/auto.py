@@ -584,7 +584,7 @@ def run_items(o, *item_names):
             '\nPossible Values:\n\t{possible_names}').format(
                 missing_names=", ".join(map(repr, missing_names)),
                 possible_names="\n\t".join([repr(item.name) for _, item in o.schedule.schedule])
-            ))
+        ))
 
     # Scheduled now.
     scheduled_time = time.time()

@@ -6,7 +6,6 @@ from __future__ import absolute_import
 import os
 import json
 import logging
-import urllib
 
 try:
     from urllib.error import URLError
@@ -17,7 +16,7 @@ except ImportError:
     from httplib import HTTPException
     from urllib import urlencode
 
-from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
+from ._core import DataSource, fetch_file, RemoteFetchException
 from .util import remove_nones
 
 _log = logging.getLogger(__name__)
@@ -91,6 +90,7 @@ class EcmwfApiSource(DataSource):
     # pylint: disable=too-many-arguments
     # Providing an instance variable for each paramater
     # available in the ECMWF API.
+
     def __init__(self,
                  cls=None,
                  dataset=None,

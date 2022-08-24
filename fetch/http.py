@@ -5,13 +5,16 @@ from __future__ import absolute_import
 
 import logging
 import re
+import time
 from contextlib import closing
+from typing import Tuple, Sequence
 
 import feedparser
 import requests
 from lxml import etree
+from requests import Session
 
-from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException
+from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException, ResultHandler, FilenameTransform
 from .compat import urljoin
 
 DEFAULT_CONNECT_TIMEOUT_SECS = 100
@@ -72,6 +75,9 @@ class HttpPostAction(SimpleObject):
         return closing(session.post(self.url, params=self.params))
 
 
+URL = str
+
+
 class HttpAuthAction(SimpleObject):
     """
     Performs authentication for the session provided.
@@ -108,20 +114,14 @@ class _HttpBaseSource(DataSource):
     """
 
     def __init__(self,
-                 target_dir,
-                 url=None,
-                 urls=None,
-                 filename_transform=None,
-                 beforehand=None,
-                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
-        """
-        :type urls: list of str
-        :type url: str
-        :type target_dir: str
-        :type beforehand: HttpPostAction
-        :type filename_transform: FilenameTransform
-        :type connection_timeout: float
-        """
+                 target_dir: str,
+                 url: URL = None,
+                 urls: Sequence[URL] = None,
+                 filename_transform: FilenameTransform = None,
+                 beforehand: HttpPostAction = None,
+                 connection_timeout: float = DEFAULT_CONNECT_TIMEOUT_SECS,
+                 retry_count: int = 3,
+                 retry_delay_seconds: float = 5.0, ):
         super(_HttpBaseSource, self).__init__()
         self.target_dir = target_dir
         self.beforehand = beforehand
@@ -135,9 +135,11 @@ class _HttpBaseSource(DataSource):
         # Connection timeout in seconds
         self.connection_timeout = connection_timeout
 
-    def _get_all_urls(self):
+        self.retry_count = retry_count
+        self.retry_delay_seconds = retry_delay_seconds
+
+    def _get_all_urls(self) -> Sequence[URL]:
         """
-        :rtype: list of str
         """
         all_urls = []
         if self.urls:
@@ -146,14 +148,13 @@ class _HttpBaseSource(DataSource):
             all_urls.append(self.url)
         return all_urls
 
-    def trigger(self, reporter):
+    def trigger(self, reporter: ResultHandler):
         """
         Trigger a download from the configured URLs.
 
         This will call the overridden trigger_url() function
         for each URL.
 
-        :type reporter: ResultHandler
         """
         all_urls = self._get_all_urls()
         if not all_urls:
@@ -171,29 +172,19 @@ class _HttpBaseSource(DataSource):
             _log.debug("Triggering %r", url)
             self.trigger_url(reporter, session, url)
 
-    def trigger_url(self, reporter, session, url):
+    def trigger_url(self, reporter: ResultHandler, session: Session, url: URL):
         """
         Trigger for the given URL. Overridden by subclasses.
-        :type reporter: ResultHandler
-        :type session: requests.Session
-        :type url: str
         """
         raise NotImplementedError("Individual URL trigger not implemented")
 
-    def _fetch_file(self,
-                    target_name,
-                    reporter,
-                    url,
-                    session=requests,
-                    override_existing=False):
+    def _fetch_files(self,
+                     urls_filenames: Sequence[Tuple[URL, str]],
+                     reporter: ResultHandler,
+                     session: Session = requests,
+                     override_existing=False):
         """
         Utility method for fetching HTTP URL to the target folder.
-
-        :type target_dir: str
-        :type target_name: str
-        :type reporter: ResultHandler
-        :type session: requests.Session
-        :type url: str
         """
 
         def do_fetch(t):
@@ -212,15 +203,23 @@ class _HttpBaseSource(DataSource):
                             f.flush()
             return True
 
-        fetch_file(
-            url,
-            do_fetch,
-            reporter,
-            target_name,
-            self.target_dir,
-            filename_transform=self.filename_transform,
-            override_existing=override_existing
-        )
+        for url, target_name in urls_filenames:
+            attempt_count = 0
+            while True:
+                did_succeed = fetch_file(
+                    url,
+                    do_fetch,
+                    reporter,
+                    target_name,
+                    self.target_dir,
+                    filename_transform=self.filename_transform,
+                    override_existing=override_existing
+                )
+                if did_succeed or attempt_count > self.retry_count:
+                    break
+
+                attempt_count += 1
+                time.sleep(self.retry_delay_seconds * attempt_count)
 
 
 class HttpSource(_HttpBaseSource):
@@ -239,7 +238,7 @@ class HttpSource(_HttpBaseSource):
         :type url: str
         """
         name = filename_from_url(url)
-        self._fetch_file(name, reporter, url, session=session, override_existing=True)
+        self._fetch_files([(url, name)], reporter, session=session, override_existing=True)
 
 
 class HttpListingSource(_HttpBaseSource):
@@ -256,13 +255,17 @@ class HttpListingSource(_HttpBaseSource):
                  name_pattern='.*',
                  filename_transform=None,
                  beforehand=None,
-                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
+                 connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS,
+                 retry_count: int = 3,
+                 retry_delay_seconds: float = 5.0):
         super(HttpListingSource, self).__init__(target_dir,
                                                 url=url,
                                                 urls=urls,
                                                 filename_transform=filename_transform,
                                                 beforehand=beforehand,
-                                                connection_timeout=connection_timeout)
+                                                connection_timeout=connection_timeout,
+                                                retry_count=retry_count,
+                                                retry_delay_seconds=retry_delay_seconds)
         self.name_pattern = name_pattern
 
     def trigger_url(self, reporter, session, url):
@@ -293,6 +296,8 @@ class HttpListingSource(_HttpBaseSource):
 
         anchors = page.xpath('//a')
 
+        # Build a list of URLs to fetch
+        urls_names = []
         for anchor in anchors:
             # : :type: str
             name = anchor.text
@@ -314,14 +319,14 @@ class HttpListingSource(_HttpBaseSource):
             if not re.match(self.name_pattern, name):
                 _log.info("Filename (%r) doesn't match pattern, skipping.", name)
                 continue
+            urls_names.append((source_url, name))
 
-            self._fetch_file(
-                name,
-                reporter,
-                source_url,
-                session=session
-                # ,override_existing=True
-            )
+        self._fetch_files(
+            urls_names,
+            reporter,
+            session=session
+            # ,override_existing=True
+        )
 
 
 class RssSource(_HttpBaseSource):
@@ -350,15 +355,9 @@ class RssSource(_HttpBaseSource):
             )
 
         feed = feedparser.parse(res.text)
-
-        for entry in feed.entries:
-            file_name = entry.title
-            file_url = entry.link
-
-            self._fetch_file(
-                file_name,
-                reporter,
-                file_url,
-                session=session
-                # ,override_existing=True
-            )
+        self._fetch_files(
+            [(entry.link, entry.title) for entry in feed.entries],
+            reporter,
+            session=session
+            # ,override_existing=True
+        )

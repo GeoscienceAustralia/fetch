@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 
 from pathlib import Path
+from typing import Callable
 
 from .util import rsync, Uri
 
@@ -249,13 +250,13 @@ def mkdirs(target_dir):
             raise
 
 
-def fetch_file(uri,
-               fetch_fn,
-               reporter,
-               target_filename,
-               target_dir,
-               filename_transform=None,
-               override_existing=False):
+def fetch_file(uri: str,
+               fetch_fn: Callable[[str], bool],
+               reporter: ResultHandler,
+               target_filename: str,
+               target_dir: str,
+               filename_transform: FilenameTransform = None,
+               override_existing: bool = False) -> bool:
     """
     Common code for fetching a file.
 
@@ -269,6 +270,7 @@ def fetch_file(uri,
     :param target_dir: The destination directory
     :param filename_transform: A transform for output filenames/folders.
     :param override_existing: Should files be re-downloaded if they already exist?
+    :return True on success
     """
     if filename_transform:
         target_dir = filename_transform.transform_output_path(
@@ -281,7 +283,7 @@ def fetch_file(uri,
 
     if os.path.exists(target_path) and not override_existing:
         _log.debug('Path exists %r. Skipping', target_path)
-        return
+        return True
 
     # Create directories if needed.
     # (We can't use 'target_dir', because the 'filename' can contain folder offsets too.)
@@ -301,18 +303,18 @@ def fetch_file(uri,
         was_success = fetch_fn(t)
         if not was_success:
             _log.debug("Download function reported error.")
-            return
+            return False
 
         if not os.path.exists(t):
             _log.debug('No file returned for %r', uri)
             reporter.file_error(uri, "No file", "")
-            return
+            return False
 
         size_bytes = os.path.getsize(t)
         if size_bytes == 0:
             _log.debug('Empty file returned for %r', uri)
             reporter.file_error(uri, "Empty file", "")
-            return
+            return False
 
         _log.debug('Fetch complete')
 
@@ -324,6 +326,8 @@ def fetch_file(uri,
     finally:
         if t and os.path.exists(t):
             os.remove(t)
+
+    return True
 
 
 def _date_range(from_days_from_now, to_days_from_now):

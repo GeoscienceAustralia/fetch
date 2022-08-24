@@ -266,7 +266,7 @@ def rsync(source_path, destination_path, source_host=None, destination_host=None
         _log.info("rsync'd files: %r", out)
         transferred = out.splitlines()
     if err:
-        _log.warn('rsync stderr: %r', err)
+        _log.warning('rsync stderr: %r', err)
     if proc.returncode:
         raise IOError('Error %d returned from rsync: (%r, %r)' % (proc.returncode, out, err))
 

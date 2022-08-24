@@ -143,18 +143,16 @@ class EcmwfApiSource(DataSource):
         """
         Synthesise a URI from the configured ECMWF host and request settings
         """
+        config_location = os.path.normpath(
+            os.path.expanduser("~/.ecmwfapirc")
+        )
         try:
-            config_location = os.path.normpath(
-                os.path.expanduser("~/.ecmwfapirc")
-            )
             with open(config_location, 'r') as f:
                 uri = json.loads(f.read())['url']
         except (IOError, KeyError) as e:
-            _log.debug('Unable to read url configuration: %s', str(e))
             raise RemoteFetchException(
-                'Unable to read url configuration at %s',
-                config_location
-            )
+                'Unable to read url configuration', f'Loading from {config_location}'
+            ) from e
 
         query = urlencode(self._get_api_settings())
         return uri + "?" + query
@@ -195,8 +193,8 @@ class EcmwfApiSource(DataSource):
                 raise RemoteFetchException(
                     summary='ECMWFDataServer failed to retrieve file',
                     detailed='target: {}, message:{}'.format(t, message))
-            except Exception as e:    # pylint: disable=broad-except
-                _log.debug("ECMWFDataServer raised " + str(e))
+            except Exception:    # pylint: disable=broad-except
+                _log.exception("ECMWFDataServer error")
                 return False
             return True
 

@@ -14,8 +14,8 @@ import yaml.resolver
 from croniter import croniter
 
 from . import ftp, http, ecmwf
-from ._core import RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, \
-    RsyncMirrorSource, SimpleObject, ShellFileProcessor
+from ._core import (RegexpOutputPathTransform, DateRangeSource, DateFilenameTransform, RsyncMirrorSource, SimpleObject,
+                    ShellFileProcessor)
 from .util import remove_nones
 
 _log = logging.getLogger(__name__)

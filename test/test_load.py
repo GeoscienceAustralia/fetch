@@ -106,9 +106,11 @@ def _make_config():
     """
     Load a config dict (this is our old schedule)
     """
-    from fetch._core import RegexpOutputPathTransform, \
-        DateRangeSource, DateFilenameTransform, \
-        RsyncMirrorSource, ShellFileProcessor
+    from fetch._core import (RegexpOutputPathTransform,
+                             DateRangeSource,
+                             DateFilenameTransform,
+                             RsyncMirrorSource,
+                             ShellFileProcessor)
     from fetch import http, ftp
     # Dump / Load / Dump to test our routines.
     anc_data = '/tmp/anc'

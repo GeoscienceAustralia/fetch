@@ -10,5 +10,3 @@ The class diagram has been developed in [Graphviz dot language](http://www.graph
 The sequence diagram shows the collaboration between objects to satisfy the ``run now`` use case.
 
 Refer to the [Makefile](./Makefile) for details of how to create these diagrams
-
-

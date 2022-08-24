@@ -1,0 +1,31 @@
+---
+# Test data is supposed to be verbatim, including errors. Exclude it from linting.
+exclude: tests/integration/data
+
+repos:
+    - repo: https://gitlab.com/pycqa/flake8
+      # flake8 version should match .travis.yml
+      rev: 3.9.2
+      hooks:
+          - id: flake8
+            additional_dependencies:
+                  - flake8-debugger # Don't commit debugger calls
+                  - flake8-logging-format # Use log arguments, not string format
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.3.0
+      hooks:
+        - id: check-added-large-files # We don't want huge files. (Cut down test data!)
+          args: ['--maxkb=3000']
+        - id: check-case-conflict # Don't allow files that differ by case sensitivity.
+        - id: check-docstring-first # Avoid common error of code before docstring.
+        - id: check-json # Check json file syntax
+        - id: check-merge-conflict
+        - id: check-symlinks # Symlinks that don't point to anything?
+        - id: debug-statements # Avoid commiting debug/breakpoints
+        - id: end-of-file-fixer # Normalise on exactly one newline
+        - id: fix-byte-order-marker # No UTF-8 byte order marks
+        - id: mixed-line-ending # Don't allow mixed line endings
+        - id: pretty-format-json
+          args: ['--no-sort-keys', '--indent=4', '--autofix']
+        - id: requirements-txt-fixer # Keep requirements files sorted.
+        - id: trailing-whitespace # Auto remove trailing whitespace

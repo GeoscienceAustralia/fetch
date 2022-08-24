@@ -228,7 +228,7 @@ def _on_child_finish(child, notifiers):
     """
     exit_code = child.exitcode
     if exit_code is None:
-        _log.warn('Child not finished %s %s', child.name, child.pid)
+        _log.warning('Child not finished %s %s', child.name, child.pid)
         return
 
     _log.debug('Child finished %r %r', child.name, child.pid)

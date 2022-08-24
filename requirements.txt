@@ -1,13 +1,13 @@
 --index-url https://pypi.python.org/simple/
 
-# Test dependencies
-pep8
-pytest>4.1.0
-pytest-cov>2.6
-mock
-# Freeze pylint/astroid to minimise unrelated Travis breakages.
-pylint==1.7.2
-astroid==1.5.3
-
 # Install the remaining from setup.py:
 -e .[ecmwf]
+astroid==1.5.3
+mock
+
+# Test dependencies
+pep8
+# Freeze pylint/astroid to minimise unrelated Travis breakages.
+pylint==1.7.2
+pytest>4.1.0
+pytest-cov>2.6

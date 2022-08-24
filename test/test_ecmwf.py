@@ -1,18 +1,16 @@
-import os
-import tempfile
-import shutil
 import json
-import datetime
+import os
 
-import pytest
 import mock
+import pytest
 
-from fetch.load import Config
 from fetch._core import RemoteFetchException
 from fetch.ecmwf import (
-    EcmwfApiSource, ECMWFDataServer, APIException, URLError,
+    EcmwfApiSource, APIException, URLError,
     HTTPException
 )
+from fetch.load import Config
+
 
 @pytest.fixture(scope="module")
 def ecmwf_config_dir(tmpdir_factory):
@@ -36,7 +34,7 @@ def test_ecmwf_retrieve_serialisation(ecmwf_config_dir):
     raw_cfg = _make_ecmwf_config()
     cfg = Config.from_dict(raw_cfg)
 
-    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+    with mock.patch.dict(os.environ, {'HOME': ecmwf_config_dir}):
         with mock.patch('tempfile.mktemp', return_value='/path/to/fetch/dir-fetch'):
             for item in cfg.rules:
                 with mock.patch('fetch.ecmwf.ECMWFDataServer') as MockServer:
@@ -65,7 +63,7 @@ def test_ecmwf_credentials_read(tmpdir):
     """
 
     api_src = EcmwfApiSource()
-    with mock.patch.dict(os.environ, {'HOME':str(tmpdir)}):
+    with mock.patch.dict(os.environ, {'HOME': str(tmpdir)}):
         with pytest.raises(RemoteFetchException):
             api_src.get_uri()  # no file configured
 
@@ -76,7 +74,7 @@ def test_ecmwf_credentials_read(tmpdir):
 
 
 def test_raises_remote_fetch_exception(ecmwf_config_dir):
-    """ Tests that RemoteFetchException is called where the remote 
+    """ Tests that RemoteFetchException is called where the remote
         server returns an error
     """
     reporter = mock.MagicMock()
@@ -84,7 +82,7 @@ def test_raises_remote_fetch_exception(ecmwf_config_dir):
 
     cfg = Config.from_dict(raw_cfg)
     data_source = cfg.rules[0].module
-    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+    with mock.patch.dict(os.environ, {'HOME': ecmwf_config_dir}):
         with mock.patch('fetch.ecmwf.ECMWFDataServer') as MockServer:
             mock_server = MockServer.return_value
 
@@ -107,7 +105,7 @@ def test_raises_remote_fetch_exception(ecmwf_config_dir):
 
 @mock.patch('os.path.getsize', return_value=500)
 def test_size(getsize_mock, ecmwf_config_dir):
-    """ Tests that files are removed if the size returned 
+    """ Tests that files are removed if the size returned
         during sync is inconsistent
     """
     raw_cfg = _make_ecmwf_config(ecmwf_config_dir)
@@ -117,7 +115,7 @@ def test_size(getsize_mock, ecmwf_config_dir):
     # Mock the ECMWFDataServer
     server = mock.Mock()
     server.retrieve.return_value = {'size': 600}
-    with mock.patch.dict(os.environ, {'HOME':ecmwf_config_dir}):
+    with mock.patch.dict(os.environ, {'HOME': ecmwf_config_dir}):
         data_source._fetch_file(server, mock.MagicMock(), False)
         # Assert getsize only called once; inside the do_fetch function
         # defined in fetch/ecmwf.py
@@ -144,7 +142,7 @@ def _make_ecmwf_config(ancillary_data_root='/tmp/anc'):
         },
         'rules': {
             'Temperature': {
-                'schedule':'0 17 26 * *',
+                'schedule': '0 17 26 * *',
                 'source': EcmwfApiSource(
                     cls='ei',
                     dataset='interim',

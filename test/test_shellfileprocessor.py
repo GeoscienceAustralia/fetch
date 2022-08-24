@@ -1,5 +1,7 @@
 
 import os
+from pathlib import Path
+
 from fetch._core import ShellFileProcessor
 
 
@@ -11,6 +13,9 @@ def test_shellfilepro_required_files_there():
     expect_file = '{base}.py'
     sfp = ShellFileProcessor(command=command, expect_file=expect_file, input_files=required_files)
     results = sfp.process(file_path)
+
+    assert results == Path(__file__).absolute().as_posix()
+
 
 def test_shellfilepro_required_files_not_there():
     command = 'ls {base}.py'

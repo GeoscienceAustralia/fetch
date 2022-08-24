@@ -15,7 +15,7 @@ from lxml import etree
 from requests import Session
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException, ResultHandler, FilenameTransform
-from .compat import urljoin
+from urllib.parse import urljoin
 
 DEFAULT_CONNECT_TIMEOUT_SECS = 100
 

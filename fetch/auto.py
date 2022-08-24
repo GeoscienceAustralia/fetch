@@ -15,20 +15,25 @@ import logging
 import multiprocessing
 import os
 import signal
-
 # This pylint warning is wrong: stat still exists?
 # pylint: disable=bad-python3-import
 import stat
-
 import sys
 import time
 
 import arrow
 from croniter import croniter
 
-from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
 from . import load
-from .compat import setproctitle
+from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
+
+# setproctitle is only supported on some platforms (Linux).
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    # On non-support platforms we won't bother setting the process name.
+    def setproctitle(title):
+        return None
 
 _log = logging.getLogger(__name__)
 
@@ -582,8 +587,8 @@ def run_items(o, *item_names):
         raise RuntimeError((
             'No rule exists with name(s): {missing_names}\n'
             '\nPossible Values:\n\t{possible_names}').format(
-                missing_names=", ".join(map(repr, missing_names)),
-                possible_names="\n\t".join([repr(item.name) for _, item in o.schedule.schedule])
+            missing_names=", ".join(map(repr, missing_names)),
+            possible_names="\n\t".join([repr(item.name) for _, item in o.schedule.schedule])
         ))
 
     # Scheduled now.

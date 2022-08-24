@@ -114,12 +114,12 @@ def load_yaml(file_path):
         config_dict = _load_config_dict(file_io)
     # TODO: What parse exceptions does yaml throw?
     except Exception as e:
-        raise ConfigError(e)
+        raise ConfigError('Error parsing config yaml') from e
 
     try:
         config = Config.from_dict(config_dict)
     except ValueError as v:
-        raise ConfigError(v)
+        raise ConfigError('Error interpreting config yaml') from v
 
     return config
 
@@ -222,7 +222,7 @@ class Config(object):
 
 def _load_config_dict(file_io):
     """Load YAML file into config dict"""
-    return yaml.load(file_io)
+    return yaml.load(file_io, Loader=yaml.UnsafeLoader)
 
 
 def _dump_config_dict(dic):
@@ -256,7 +256,7 @@ def verify_can_construct(target_class, fields, identifier=None):
     """
     if not identifier:
         identifier = target_class.__name__
-    arg_spec = inspect.getargspec(target_class.__init__)
+    arg_spec = inspect.getfullargspec(target_class.__init__)
 
     # Does the class take no arguments (just 'self')?
     if len(arg_spec.args) == 1 and len(fields) == 0:

@@ -8,34 +8,28 @@ import logging
 import os
 import re
 import time
+from typing import Iterable, Callable
 
-from ._core import DataSource, fetch_file, RemoteFetchException
+from ._core import DataSource, fetch_file, RemoteFetchException, ResultHandler
 
 _log = logging.getLogger(__name__)
 DEFAULT_SOCKET_TIMEOUT_SECS = 60 * 5.0
 
 
-def _fetch_files(hostname,
-                 target_dir,
-                 reporter,
-                 get_filepaths_fn,
+def _fetch_files(hostname: str,
+                 target_dir: str,
+                 reporter: ResultHandler,
+                 get_filepaths_fn: Callable[[ftplib.FTP], Iterable[str]],
                  override_existing=False,
                  filename_transform=None,
-                 retries=3,
-                 retry_delay=5):
+                 retries: int = 3,
+                 retry_delay: float = 5):
     """
     Fetch fetch files on the given FTP server.
 
     The get_filepaths_fn callback is used to get a list of files to download.
 
     It it passed an instance of the connection so that it can query the server if needed.
-
-    :type get_filepaths_fn: (ftplib.FTP) -> list of str
-    :type hostname: str
-    :type target_dir: str
-    :type reporter: ResultHandler
-    :type retries: int
-    :type retry_delay: int
     """
 
     try:
@@ -180,7 +174,7 @@ class FtpListingSource(DataSource):
         :return:
         """
 
-        def get_files(ftp):
+        def get_files(ftp: ftplib.FTP) -> Iterable[str]:
             """Get files that match the name_pattern in the target directory."""
             try:
                 files = ftp.nlst(self.source_dir)

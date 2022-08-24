@@ -303,8 +303,8 @@ A more complex example involving sidecar files requiring download but to be trea
       schedule: '10/10 * * * *'
       source: !date-range
         # Download from one day ago (-1) to tomorrow (1):
-        start_day: -20 
-        end_day: -10 
+        start_day: -20
+        end_day: -10
         overridden_properties:
           url: https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.006/{year}.{month}.{day}
           target_dir: /tmp/data/BRDF/MCD43A1.006/{year}.{month}.{day}
@@ -327,7 +327,7 @@ Where:
 - `input_files:` contains a regex pattern, and list of expected files that are to be checked before running the post-process command
 - `expect_file:` is the full path to an output file. (To allow fetch daemon to track newly added files)
 This is useful when there are sidecar files.
-The value format is a list where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'` 
+The value format is a list where the first element is a regx pattern.  e.g.  `'^(?P<base>.*hdf)'`
 This is applied to the full name of the downloaded file and used to create named groups used in the second element.
 The second element is a list of files that must be present before the shell command is executed.
 
@@ -342,4 +342,3 @@ Send a `SIGINT` or `SIGTERM` signal to start a graceful shutdown (any active
 downloads will be completed before exiting).
 
     kill <pid>
-

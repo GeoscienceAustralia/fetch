@@ -33,8 +33,8 @@ class SessionWithRedirection(requests.Session):
         original_parsed = requests.utils.urlparse(old_url)
         redirect_parsed = requests.utils.urlparse(new_url)
 
-        if original_parsed.hostname in self.TRUSTED_HOSTS or \
-                redirect_parsed.hostname in self.TRUSTED_HOSTS:
+        if (original_parsed.hostname in self.TRUSTED_HOSTS or
+                redirect_parsed.hostname in self.TRUSTED_HOSTS):
             return False
         return super(SessionWithRedirection, self).should_strip_auth(old_url, new_url)
 

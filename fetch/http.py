@@ -219,6 +219,7 @@ class _HttpBaseSource(DataSource):
                     break
 
                 attempt_count += 1
+                _log.debug('Will retry, attempt %s', attempt_count)
                 time.sleep(self.retry_delay_seconds * attempt_count)
 
 

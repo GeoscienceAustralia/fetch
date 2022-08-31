@@ -187,10 +187,20 @@ class _HttpBaseSource(DataSource):
         Utility method for fetching HTTP URL to the target folder.
         """
 
-        def do_fetch(t):
-            """Fetch data to filename t"""
-            with closing(session.get(url, stream=True, timeout=self.connection_timeout)) as res:
-                if res.status_code != 200:
+        def do_fetch(t: str):
+            """Fetch data to file path t"""
+
+            res = session.get(url, stream=True, timeout=self.connection_timeout)
+            redirect_count = 0
+            try:
+                while res.status_code != 200:
+                    if res.url and redirect_count < 3:
+                        res2 = session.get(res.url, stream=True, timeout=self.connection_timeout)
+                        res.close()
+                        res = res2
+                        redirect_count += 1
+                        continue
+
                     body = res.text
                     _log.debug('Received text %r', res.text)
                     reporter.file_error(url, "Status code %r" % res.status_code, body)
@@ -201,6 +211,9 @@ class _HttpBaseSource(DataSource):
                         if chunk:
                             f.write(chunk)
                             f.flush()
+            finally:
+                res.close()
+
             return True
 
         for url, target_name in urls_filenames:

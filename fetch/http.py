@@ -6,16 +6,22 @@ from __future__ import absolute_import
 import logging
 import re
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from contextlib import closing
+from http.cookiejar import CookieJar
 from typing import Tuple, Sequence
+from urllib.error import HTTPError
+from urllib.parse import urljoin
 
 import feedparser
 import requests
 from lxml import etree
 from requests import Session
+from requests.auth import HTTPBasicAuth
 
 from ._core import SimpleObject, DataSource, fetch_file, RemoteFetchException, ResultHandler, FilenameTransform
-from urllib.parse import urljoin
 
 DEFAULT_CONNECT_TIMEOUT_SECS = 100
 
@@ -86,7 +92,7 @@ class HttpAuthAction(SimpleObject):
     def __init__(self, url, username, password,
                  connection_timeout=DEFAULT_CONNECT_TIMEOUT_SECS):
         self.url = url
-        self.params = (username, password)
+        self.username_password = (username, password)
         self.connection_timeout = connection_timeout
 
     def get_result(self, session):
@@ -94,9 +100,20 @@ class HttpAuthAction(SimpleObject):
         # but I think it is asking for a redirect to the login page?
         login_url = session.request('get', self.url, timeout=self.connection_timeout).url
 
-        session.auth = self.params
+        # Install into urllib.
+        if self.username_password:
+            session.auth = HTTPBasicAuth(*self.username_password)
+            username, password = self.username_password
+            password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+            password_manager.add_password(None, login_url, username, password)
 
-        res = session.get(login_url, auth=self.params, timeout=self.connection_timeout)
+            cookie_jar = CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPBasicAuthHandler(password_manager),
+                urllib.request.HTTPCookieProcessor(cookie_jar))
+            urllib.request.install_opener(opener)
+
+        res = session.get(login_url, auth=self.username_password, timeout=self.connection_timeout)
         if res.status_code != 200:
             # We don't bother with reporter.file_error() as this initial fetch is critical.
             # Throw an exception instead.
@@ -190,29 +207,18 @@ class _HttpBaseSource(DataSource):
         def do_fetch(t: str):
             """Fetch data to file path t"""
 
-            res = session.get(url, stream=True, timeout=self.connection_timeout)
-            redirect_count = 0
             try:
-                while res.status_code != 200:
-                    if res.url and redirect_count < 3:
-                        res2 = session.get(res.url, stream=True, timeout=self.connection_timeout)
-                        res.close()
-                        res = res2
-                        redirect_count += 1
-                        continue
+                request = urllib.request.Request(url)
+                response = urllib.request.urlopen(request, timeout=self.connection_timeout)
 
-                    body = res.text
-                    _log.debug('Received text %r', res.text)
-                    reporter.file_error(url, "Status code %r" % res.status_code, body)
-                    return False
+            except HTTPError as e:
+                reporter.file_error(url, "Status code %r" % e.code, e.reason)
+                _log.debug('Error response', exc_info=True)
+                return False
 
-                with open(t, 'wb') as f:
-                    for chunk in res.iter_content(4096):
-                        if chunk:
-                            f.write(chunk)
-                            f.flush()
-            finally:
-                res.close()
+            with open(t, 'wb') as f:
+                f.write(response.read())
+                f.flush()
 
             return True
 
@@ -294,7 +300,7 @@ class HttpListingSource(_HttpBaseSource):
             _log.debug("Listing page doesn't exist yet. Skipping.")
             return
 
-        if res.status_code != 200:
+        if not res.ok:
             # We don't bother with reporter.file_error() as this initial fetch is critical.
             # Throw an exception instead.
             raise RemoteFetchException(

@@ -6,13 +6,8 @@ from __future__ import absolute_import
 import logging
 import re
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from contextlib import closing
-from http.cookiejar import CookieJar
 from typing import Tuple, Sequence
-from urllib.error import HTTPError
 from urllib.parse import urljoin
 
 import feedparser
@@ -43,6 +38,20 @@ class SessionWithRedirection(requests.Session):
                 redirect_parsed.hostname in self.TRUSTED_HOSTS):
             return False
         return super(SessionWithRedirection, self).should_strip_auth(old_url, new_url)
+
+    def rebuild_auth(self, prepared_request, response):
+        headers = prepared_request.headers
+
+        url = prepared_request.url
+
+        if 'Authorization' in headers:
+            original_parsed = requests.utils.urlparse(response.request.url)
+            redirect_parsed = requests.utils.urlparse(url)
+
+            if ((original_parsed.hostname != redirect_parsed.hostname) and
+                    (redirect_parsed.hostname not in self.TRUSTED_HOSTS) and
+                    (original_parsed.hostname not in self.TRUSTED_HOSTS)):
+                del headers['Authorization']
 
 
 def filename_from_url(url):
@@ -103,15 +112,6 @@ class HttpAuthAction(SimpleObject):
         # Install into urllib.
         if self.username_password:
             session.auth = HTTPBasicAuth(*self.username_password)
-            username, password = self.username_password
-            password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-            password_manager.add_password(None, login_url, username, password)
-
-            cookie_jar = CookieJar()
-            opener = urllib.request.build_opener(
-                urllib.request.HTTPBasicAuthHandler(password_manager),
-                urllib.request.HTTPCookieProcessor(cookie_jar))
-            urllib.request.install_opener(opener)
 
         res = session.get(login_url, auth=self.username_password, timeout=self.connection_timeout)
         if res.status_code != 200:
@@ -207,19 +207,18 @@ class _HttpBaseSource(DataSource):
         def do_fetch(t: str):
             """Fetch data to file path t"""
 
-            try:
-                request = urllib.request.Request(url)
-                response = urllib.request.urlopen(request, timeout=self.connection_timeout)
-
-            except HTTPError as e:
-                reporter.file_error(url, "Status code %r" % e.code, e.reason)
-                _log.debug('Error response', exc_info=True)
+            res = session.get(url, stream=True, timeout=self.connection_timeout)
+            if not res.ok:
+                body = res.text
+                _log.debug('Received text %r', res.text)
+                reporter.file_error(url, "Status code %r" % res.status_code, body)
                 return False
 
             with open(t, 'wb') as f:
-                f.write(response.read())
-                f.flush()
-
+                for chunk in res.iter_content(4096):
+                    if chunk:
+                        f.write(chunk)
+                        f.flush()
             return True
 
         for url, target_name in urls_filenames:

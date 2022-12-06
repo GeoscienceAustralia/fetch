@@ -126,6 +126,8 @@ class HttpAuthAction(SimpleObject):
 
     def __repr__(self):
         fields = self.__dict__
+
+        # We'd rather not log the password.
         if self.username_password:
             fields = fields.copy()
             fields['username_password'] = (self.username_password[0], '<**redacted**>')

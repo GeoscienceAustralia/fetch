@@ -124,6 +124,14 @@ class HttpAuthAction(SimpleObject):
 
         return closing(res)
 
+    def __repr__(self):
+        fields = self.__dict__
+        if self.username_password:
+            fields = fields.copy()
+            fields['username_password'] = (self.username_password[0], '<**redacted**>')
+
+        return '%s(%r)' % (self.__class__.__name__, fields)
+
 
 class _HttpBaseSource(DataSource):
     """

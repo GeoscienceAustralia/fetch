@@ -336,17 +336,17 @@ class HttpListingSource(_HttpBaseSource):
             href_ = anchor.attrib['href']
 
             if not name:
-                _log.info("Skipping empty anchor for %r", href_)
+                _log.debug("Skipping empty anchor for %r", href_)
                 continue
 
             source_url = urljoin(url, href_)
 
             if not href_.endswith(name):
-                _log.info('Not a filename %r, skipping.', name)
+                _log.debug('Not a filename %r, skipping.', name)
                 continue
 
             if not re.match(self.name_pattern, name):
-                _log.info("Filename (%r) doesn't match pattern, skipping.", name)
+                _log.debug("Filename (%r) doesn't match pattern, skipping.", name)
                 continue
             urls_names.append((source_url, name))
 

@@ -5,14 +5,14 @@ exclude: tests/integration/data
 repos:
     - repo: https://github.com/pycqa/flake8
       # flake8 version should match .travis.yml
-      rev: 6.0.0
+      rev: 7.0.0
       hooks:
           - id: flake8
             additional_dependencies:
                   - flake8-debugger # Don't commit debugger calls
                   - flake8-logging-format # Use log arguments, not string format
     - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v4.4.0
+      rev: v4.5.0
       hooks:
         - id: check-added-large-files # We don't want huge files. (Cut down test data!)
           args: ['--maxkb=3000']

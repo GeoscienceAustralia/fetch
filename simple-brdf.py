@@ -19,8 +19,10 @@ from typing import Iterable, Iterator, Optional, Set, Tuple
 
 import httpx
 import structlog
-from httpx import URL
+from httpx import URL, Cookies
 from lxml import etree
+
+MAX_DAYS_TO_DOWNLOAD = 2
 
 MAX_RETRIES = 0
 
@@ -260,6 +262,7 @@ class BrdfClient:
                     response.close()
 
 
+
 def get_with_auth(url: URL, auth, trusted_hosts: Set[str], session: httpx.Client, stream=False) -> httpx.Response:
     """
     Get a URL with the given auth, following redirects.
@@ -271,9 +274,15 @@ def get_with_auth(url: URL, auth, trusted_hosts: Set[str], session: httpx.Client
     redirect_count = 0
     response = None
 
+    raw_cookies = dict(session.cookies.items())
     request = session.build_request("GET", url)
+
     while request is not None:
         include_auth = request.url.host in trusted_hosts
+        LOG.debug("trusted_host", host=request.url.host, is_trusted=include_auth)
+        if include_auth:
+            Cookies(raw_cookies).set_cookie_header(request)
+
         LOG.info("get_with_auth", url=request.url, include_auth=include_auth)
         response = session.send(request, auth=auth if include_auth else None, follow_redirects=False, stream=stream)
         request = response.next_request
@@ -296,7 +305,7 @@ def find_days_with_missing_brdf_tiles(
     """
     date = end_date
 
-    max_days = 5
+    max_days = MAX_DAYS_TO_DOWNLOAD
     while date >= start_date:
         date_folder = folder / f"{date:%Y.%m.%d}"
         if not date_folder.exists():
@@ -336,8 +345,8 @@ def download_files(
         password: str,
         required_brdf_tiles: Set[str],
         output_base_path: Path,
-        max_queue_size: int = 10,
-        max_workers=5,
+        max_queue_size: int = 3,
+        max_workers=1,
         clean_up: bool = False,
 ):
     """

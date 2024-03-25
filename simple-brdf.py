@@ -181,6 +181,7 @@ class BrdfClient:
 
             # A pair of .hdf and .hdf.xml files
             yield file_url, expected_xml_url
+            break
 
     def _get_with_retries(self, url: URL) -> httpx.Response:
         retries = 0
@@ -280,12 +281,15 @@ def get_with_auth(url: URL, auth, trusted_hosts: Set[str], session: httpx.Client
     while request is not None:
         include_auth = request.url.host in trusted_hosts
         LOG.debug("trusted_host", host=request.url.host, is_trusted=include_auth)
-        if include_auth:
-            Cookies(raw_cookies).set_cookie_header(request)
-
         LOG.info("get_with_auth", url=request.url, include_auth=include_auth)
-        response = session.send(request, auth=auth if include_auth else None, follow_redirects=False, stream=stream)
+        response = session.send(request, follow_redirects=False, stream=stream)
+        headers_used = dict(request.headers.items())
         request = response.next_request
+
+        if request and request.url.host in trusted_hosts:
+            if not headers_used['authorization']:
+                raise RuntimeError(f"Expected to have an authorization header for {request.url}")
+            request.headers['authorization'] = headers_used['authorization']
         redirect_count += 1
         if redirect_count > 30:
             raise RuntimeError(f"Too many redirects (last was from {url} to {response.url})")

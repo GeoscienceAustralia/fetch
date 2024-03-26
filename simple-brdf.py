@@ -1,5 +1,6 @@
 import datetime
 import os
+
 import re
 import subprocess
 import sys
@@ -19,12 +20,12 @@ from typing import Iterable, Iterator, Optional, Set, Tuple
 
 import httpx
 import structlog
-from httpx import URL, Cookies
+from httpx import URL
 from lxml import etree
 
-MAX_DAYS_TO_DOWNLOAD = 2
+COOKIE_JAR = os.path.expanduser("~/.urs_cookies")
 
-MAX_RETRIES = 0
+MAX_DAYS_TO_DOWNLOAD = 2
 
 # One hour
 LOGIN_TIMEOUT_SECONDS = 60 * 60
@@ -63,47 +64,19 @@ def _iterate_dates(start: dt.date, end: dt.date) -> Iterator[dt.date]:
 
 
 class BrdfClient:
-    TRUSTED_HOSTS = {
-        "e4ftl01.cr.usgs.gov",
-        "urs.earthdata.nasa.gov",
-    }
 
-    def __init__(self, *, username: str, password: str):
-        self.username = username
-        self.password = password
+    def __init__(self, *, max_retries: Optional[int] = 3):
 
+        self.max_retries = max_retries
         self.service_root_url: URL = URL("https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.061/")
 
         self.session = httpx.Client()
-        self.login_mtime = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.session.close()
-
-    def check_login(self):
-        """If it's been too long since login, refresh our token"""
-        if (
-                self.login_mtime is None
-                or time.monotonic() - self.login_mtime > LOGIN_TIMEOUT_SECONDS
-        ):
-            self.login()
-
-    def login(self):
-        # The old code did it this way. It may redirect to a login page.
-        # It will store basic auth on the session for actual requests afterwards.
-        # (I believe hitting the main site like this gives us a cookie that is needed for the actual download)
-        LOG.info('logging_in')
-        login_url = self.session.get("https://urs.earthdata.nasa.gov").url
-        self.session.auth = httpx.BasicAuth(self.username, self.password)
-        response = self.session.get(login_url)
-        if not response.is_success:
-            raise RuntimeError(
-                f"Failed to authenticate with Earthdata. Response: {response.content.decode()}"
-            )
-        self.login_mtime = time.monotonic()
 
     def _yield_directory_page_links(self, url: URL) -> Iterable[URL]:
         """
@@ -181,21 +154,18 @@ class BrdfClient:
 
             # A pair of .hdf and .hdf.xml files
             yield file_url, expected_xml_url
-            break
 
     def _get_with_retries(self, url: URL) -> httpx.Response:
         retries = 0
         delay = 2
         while True:
             LOG.info("get_with_retries", url=url, retries=retries)
-            self.check_login()
-
-            response = get_with_auth(url, (self.username, self.password), self.TRUSTED_HOSTS, self.session)
+            response = self.session.get(url, follow_redirects=True)
 
             if response.is_success:
                 break
 
-            if retries >= MAX_RETRIES:
+            if retries >= self.max_retries:
                 raise RuntimeError(
                     f"Failed to retrieve {url} after {retries} retries, message: {response.content.decode()}"
                 )
@@ -218,82 +188,33 @@ class BrdfClient:
 
         It will return the path inside your folder of the downloaded file.
         """
-        path = output_base_folder / url.path[1:]
+        path = (output_base_folder / url.path[1:]).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
         log = LOG.bind(url=url)
 
         if path.exists():
             log.info("already_downloaded", path=path)
             return path
+        tmp_path = path.with_name(
+            f".incomplete.{path.name}"
+        )
 
-        retries = 0
-        delay = 2
+        # Do it with curl, so we can follow their documented example exactly. There's difficult-to-manage
+        # cookie/host nuances otherwise.
+        subprocess.check_call(
+            [
+                "curl",
+                "-o", tmp_path.as_posix(),
+                "-b", COOKIE_JAR,
+                "-c", COOKIE_JAR,
+                "-L",
+                "-n",
+                str(url),
+            ],
+        )
+        tmp_path.rename(path)
+        return path
 
-        while retries <= MAX_RETRIES:
-            response = None
-            try:
-                log.info("downloading")
-                response = get_with_auth(url, (self.username, self.password), self.TRUSTED_HOSTS, self.session, stream=True)
-                if response.is_success:
-                    tmp_path = path.with_name(
-                        f".incomplete-{time.time_ns()}.{path.name}"
-                    )
-                    with tmp_path.open("wb") as f:
-                        for chunk in response.iter_bytes(chunk_size=8192):
-                            f.write(chunk)
-                    tmp_path.rename(path)
-                    return path
-                else:
-                    log.error(
-                        "download_failure",
-                        status_code=response.status_code,
-                        delay=delay,
-                        retries=retries,
-                    )
-                    retries += 1
-                    time.sleep(delay)
-                    delay *= 2
-            except Exception:
-                log.exception("download_exception", delay=delay, retries=retries)
-                retries += 1
-                time.sleep(delay)
-                delay *= 2
-            finally:
-                if response is not None:
-                    response.close()
-
-
-
-def get_with_auth(url: URL, auth, trusted_hosts: Set[str], session: httpx.Client, stream=False) -> httpx.Response:
-    """
-    Get a URL with the given auth, following redirects.
-
-    We follow redirects manually as we need to carry our auth between USGS's servers (the given trusted_hosts).
-
-    (good client libraries will strip auth from redirects as it would leak credentials)
-    """
-    redirect_count = 0
-    response = None
-
-    raw_cookies = dict(session.cookies.items())
-    request = session.build_request("GET", url)
-
-    while request is not None:
-        include_auth = request.url.host in trusted_hosts
-        LOG.debug("trusted_host", host=request.url.host, is_trusted=include_auth)
-        LOG.info("get_with_auth", url=request.url, include_auth=include_auth)
-        response = session.send(request, follow_redirects=False, stream=stream)
-        headers_used = dict(request.headers.items())
-        request = response.next_request
-
-        if request and request.url.host in trusted_hosts:
-            if not headers_used['authorization']:
-                raise RuntimeError(f"Expected to have an authorization header for {request.url}")
-            request.headers['authorization'] = headers_used['authorization']
-        redirect_count += 1
-        if redirect_count > 30:
-            raise RuntimeError(f"Too many redirects (last was from {url} to {response.url})")
-    return response
 
 
 def find_days_with_missing_brdf_tiles(
@@ -345,12 +266,12 @@ def _parse_day_folder(date: str) -> datetime.date:
 
 
 def download_files(
-        username: str,
-        password: str,
         required_brdf_tiles: Set[str],
         output_base_path: Path,
+        max_retries:int = 0,
         max_queue_size: int = 3,
         max_workers=1,
+        max_downloads = 1,
         clean_up: bool = False,
 ):
     """
@@ -363,7 +284,7 @@ def download_files(
     download_tmp.mkdir(parents=True, exist_ok=True)
     count = 0
 
-    with BrdfClient(username=username, password=password) as client:
+    with BrdfClient(max_retries=max_retries) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
 
@@ -413,18 +334,29 @@ def download_files(
                             tasks, return_when="FIRST_COMPLETED", timeout=10
                         )
 
-                    task: Future = executor.submit(
-                        download_and_convert,
-                        client,
-                        (hdf_url, hdf_xml_url),
-                        staging_dir,
-                        target_dir,
-                        clean_up,
-                    )
-                    active_task_count += 1
-                    task.add_done_callback(done_one)
-                    tasks.append(task)
+                    # Do the first synchronously, no concurrency, to save the auth cookies first.
+                    # A slow ramp-up is fine.
+                    if count < 1:
+                        download_and_convert(client,
+                                             (hdf_url, hdf_xml_url),
+                                             staging_dir,
+                                             target_dir,
+                                             clean_up)
+                    else:
+                        task: Future = executor.submit(
+                            download_and_convert,
+                            client,
+                            (hdf_url, hdf_xml_url),
+                            staging_dir,
+                            target_dir,
+                            clean_up,
+                        )
+                        active_task_count += 1
+                        task.add_done_callback(done_one)
+                        tasks.append(task)
                     count += 1
+                    if count >= max_downloads:
+                        break
 
                 # Trim tasks if needed
                 trimmed_tasks = []
@@ -435,7 +367,7 @@ def download_files(
                         trimmed_tasks.append(task)
                 tasks = trimmed_tasks
 
-                if count >= 4:
+                if count >= max_downloads:
                     break
 
             log.info("awaiting_final_tasks")
@@ -475,7 +407,10 @@ def download_and_convert(
     if hdf_path is None or hdf_xml_path is None:
         log.error("download_failed", hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
         return
+
+    log.info('converting', hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
     output_h5_path = convert_to_h5(hdf_path, output_folder)
+    log.info('converted', output_h5_path=output_h5_path)
 
     if clean_up:
         hdf_path.unlink()
@@ -569,8 +504,6 @@ def main():
         cache_logger_on_first_use=False,
     )
     download_files(
-        os.environ["EARTHDATA_USERNAME"],
-        os.environ["EARTHDATA_PASSWORD"],
         required_brdf_tiles=required_brdf_tiles,
         output_base_path=output,
     )

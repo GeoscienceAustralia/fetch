@@ -2,6 +2,7 @@ import datetime
 import os
 
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -23,6 +24,12 @@ import structlog
 from httpx import URL
 from lxml import etree
 
+# ipv6 was not working on the gadi-dm NCI node.
+import urllib3.util.connection
+urllib3.util.connection.HAS_IPV6 = False
+import socket
+socket.has_ipv6 = False
+
 COOKIE_JAR = os.path.expanduser("~/.urs_cookies")
 
 MAX_DAYS_TO_DOWNLOAD = 2
@@ -39,7 +46,6 @@ LOG = structlog.get_logger()
 # On download, there are two files for each HDF file, the .hdf and the .hdf.xml
 # We convert them into one .h5 file.
 #
-
 _BRDF_FILENAME_PATTERN = re.compile(
     r"MCD43A1\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.061\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z]+)$"
 )
@@ -64,13 +70,28 @@ def _iterate_dates(start: dt.date, end: dt.date) -> Iterator[dt.date]:
 
 
 class BrdfClient:
-
-    def __init__(self, *, max_retries: Optional[int] = 3):
+    TRUSTED_HOSTS = {
+        "e4ftl01.cr.usgs.gov",
+        "urs.earthdata.nasa.gov",
+    }
+    def __init__(self,
+                 *,
+                 max_retries: Optional[int] = 3,
+                 username: Optional[str] = None,
+                 password: Optional[str] = None,
+                 min_request_period_secs: Optional[float] = 0.3,
+                 ):
 
         self.max_retries = max_retries
         self.service_root_url: URL = URL("https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.061/")
 
+        self.username = username
+        self.password = password
+
         self.session = httpx.Client()
+
+        self.min_request_period_secs = min_request_period_secs
+        self.last_request_monotonic = time.monotonic() - min_request_period_secs - 1.0
 
     def __enter__(self):
         return self
@@ -155,12 +176,37 @@ class BrdfClient:
             # A pair of .hdf and .hdf.xml files
             yield file_url, expected_xml_url
 
-    def _get_with_retries(self, url: URL) -> httpx.Response:
+    def _get_with_retries(self, url: URL, include_auth=False) -> httpx.Response:
         retries = 0
         delay = 2
         while True:
             LOG.info("get_with_retries", url=url, retries=retries)
-            response = self.session.get(url, follow_redirects=True)
+            response = None
+            request = self.session.build_request("GET", url)
+            while request is not None:
+
+                # Delay if needed, to not request more often than allowed.
+                next_request_allowed_in = (self.last_request_monotonic + self.min_request_period_secs) - time.monotonic()
+                if next_request_allowed_in > 0:
+                    time.sleep(next_request_allowed_in)
+
+                args = {}
+                if include_auth:
+                    if not self.username or not self.password:
+                        raise ValueError("No username/password supplied, but operation requires auth")
+                    args['auth'] = (self.username, self.password)
+
+                response = self.session.send(request, **args, follow_redirects=False)
+
+                headers_used = dict(request.headers.items())
+                request = response.next_request
+
+                self.last_request_monotonic = time.monotonic()
+
+                if include_auth and request and request.url.host in self.TRUSTED_HOSTS:
+                    if not headers_used['authorization']:
+                        raise RuntimeError(f"Expected to have an authorization header for {request.url}")
+                    request.headers['authorization'] = headers_used['authorization']
 
             if response.is_success:
                 break
@@ -199,22 +245,14 @@ class BrdfClient:
             f".incomplete.{path.name}"
         )
 
-        # Do it with curl, so we can follow their documented example exactly. There's difficult-to-manage
-        # cookie/host nuances otherwise.
-        subprocess.check_call(
-            [
-                "curl",
-                "-o", tmp_path.as_posix(),
-                "-b", COOKIE_JAR,
-                "-c", COOKIE_JAR,
-                "-L",
-                "-n",
-                str(url),
-            ],
-        )
+        # We aren't doing chunked as these are small.
+        response = self._get_with_retries(url, include_auth=True)
+        response.raise_for_status()
+        with tmp_path.open("wb") as f:
+            f.write(response.content)
+
         tmp_path.rename(path)
         return path
-
 
 
 def find_days_with_missing_brdf_tiles(
@@ -265,26 +303,38 @@ def _parse_day_folder(date: str) -> datetime.date:
     return dt.strptime(date, "%Y.%m.%d").date()
 
 
-def download_files(
-        required_brdf_tiles: Set[str],
-        output_base_path: Path,
-        max_retries:int = 0,
-        max_queue_size: int = 3,
-        max_workers=1,
-        max_downloads = 1,
-        clean_up: bool = False,
-):
+_unset = object()
+
+
+def download_files(required_brdf_tiles: Set[str],
+                   output_base_path: Path,
+                   username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
+                   password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
+                   max_retries: int = 0,
+                   max_queue_size: int = 3,
+                   max_workers: int = 1,
+                   max_downloads: int = 1,
+                   clean_up: bool = False,
+                   no_older_than:datetime.date = None,
+                   no_newer_than:datetime.date = None,
+                   ):
     """
     Download and convert MCD43A1 files from USGS
 
     The base path will have YYYY.MM.DD subdirectories, matching the download location.
+    :param no_older_than:
+    :param no_newer_than:
     """
+    if username is _unset or password is _unset:
+        raise ValueError("No username/password supplied "
+                         "(nor EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables)")
+
     log = LOG
     download_tmp = output_base_path / ".tmp"
     download_tmp.mkdir(parents=True, exist_ok=True)
     count = 0
 
-    with BrdfClient(max_retries=max_retries) as client:
+    with BrdfClient(max_retries=max_retries, username=username, password=password) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
 
@@ -302,8 +352,15 @@ def download_files(
                 except:
                     LOG.exception("path_error")
 
+            # Clamp the date range if needed.
+            start_date, end_date = client.find_available_date_range()
+            if no_older_than and start_date < no_older_than:
+                start_date = no_older_than
+            if no_newer_than and end_date > no_newer_than:
+                end_date = no_newer_than
+
             for date, missing_tiles in find_days_with_missing_brdf_tiles(
-                    output_base_path, required_brdf_tiles, *client.find_available_date_range()
+                    output_base_path, required_brdf_tiles, start_date, end_date
             ):
                 log = LOG.bind(date=date)
                 target_dir = output_base_path / f"{date:%Y.%m.%d}"
@@ -317,11 +374,12 @@ def download_files(
                 ):
                     hdf_name = url_filename(hdf_url)
 
-                    expected_output_h5 = target_dir / hdf_name
-                    if expected_output_h5.exists():
-                        continue
-
                     log = log.bind(hdf_name=hdf_name)
+
+                    expected_output_h5 = target_dir / hdf_name.replace('.hdf', '.h5')
+                    if expected_output_h5.exists():
+                        log.debug('skip_existing', output_h5=expected_output_h5)
+                        continue
 
                     while active_task_count >= max_queue_size:
                         log.debug(
@@ -409,7 +467,7 @@ def download_and_convert(
         return
 
     log.info('converting', hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
-    output_h5_path = convert_to_h5(hdf_path, output_folder)
+    output_h5_path = convert_to_h5(hdf_path, output_folder, log=log)
     log.info('converted', output_h5_path=output_h5_path)
 
     if clean_up:
@@ -419,7 +477,7 @@ def download_and_convert(
     return output_h5_path
 
 
-def convert_to_h5(input_hdf_file: Path, out_dir: Path) -> Path:
+def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     expected_hdf_xml_path = input_hdf_file.with_name(f"{input_hdf_file.name}.xml")
     if not expected_hdf_xml_path.exists():
         raise ValueError(
@@ -430,20 +488,25 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path) -> Path:
     tmp_output.mkdir(parents=True, exist_ok=True)
 
     try:
+        cmd = (
+            "swfo-convert",
+            "mcd43a1",
+            "h5-md",
+            "--fname",
+            input_hdf_file.as_posix(),
+            "--outdir",
+            tmp_output.as_posix(),
+            "--filter-opts",
+            '{"aggression": 6}',
+            "--compression",
+            "BLOSC_ZSTANDARD",
+        )
+        log.debug(
+            'swfo-cmd',
+            cmd=' '.join(shlex.quote(str(arg)) for arg in cmd)
+        )
         subprocess.run(
-            [
-                "swfo-convert",
-                "mcd43a1",
-                "h5-md",
-                "--fname",
-                input_hdf_file.as_posix(),
-                "--outdir",
-                tmp_output.as_posix(),
-                "--filter-opts",
-                '{{"aggression": 6}}',
-                "--compression",
-                "BLOSC_ZSTANDARD",
-            ],
+            cmd,
             check=True,
         )
     except subprocess.CalledProcessError as e:
@@ -467,13 +530,24 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path) -> Path:
     return final_output_file
 
 
-def main():
-    required_brdf_tiles = {
-        "h22v14",
-        "h27v14",
-    }
+def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folder=Path("test_out"),
+        min_age_days=30):
+    # The two offshore tiles, then the whole range of Australian tiles.
+    brdf_tiles = set()
 
-    output = Path("test_out")
+    if offshore_tiles:
+        brdf_tiles.update({'h22v14', 'h27v14'})
+    if mainland_tiles:
+        for h in range(27, 33):
+            for v in range(9, 14):
+                brdf_tiles.add(f"h{h:02d}v{v:02d}")
+        # Two corners. No off-by-one errors
+        assert 'h27v09' in brdf_tiles
+        assert 'h32v13' in brdf_tiles
+
+    no_newer_than = (datetime.datetime.now() - timedelta(days=min_age_days)).date()
+    no_older_than = None
+
     import logging
 
     shared_processors = [
@@ -504,8 +578,9 @@ def main():
         cache_logger_on_first_use=False,
     )
     download_files(
-        required_brdf_tiles=required_brdf_tiles,
-        output_base_path=output,
+        required_brdf_tiles=brdf_tiles,
+        output_base_path=output_folder,
+        no_older_than=no_older_than, no_newer_than=no_newer_than,
     )
 
 

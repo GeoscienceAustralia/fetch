@@ -32,8 +32,6 @@ socket.has_ipv6 = False
 
 COOKIE_JAR = os.path.expanduser("~/.urs_cookies")
 
-MAX_DAYS_TO_DOWNLOAD = 2
-
 # One hour
 LOGIN_TIMEOUT_SECONDS = 60 * 60
 
@@ -266,10 +264,11 @@ def find_days_with_missing_brdf_tiles(
 
     Expects the standard structure in the given output folder: folder/YYYY.MM.DD/*.h5
     """
-    date = end_date
+    date = end_date + timedelta(days=1)
 
-    max_days = MAX_DAYS_TO_DOWNLOAD
-    while date >= start_date:
+    while date > start_date:
+        date -= timedelta(days=1)
+
         date_folder = folder / f"{date:%Y.%m.%d}"
         if not date_folder.exists():
             yield date, set(expected_brdf_tiles)
@@ -292,11 +291,6 @@ def find_days_with_missing_brdf_tiles(
 
         if missing_tile_filenames:
             yield date, missing_tile_filenames
-            max_days -= 1
-
-        date -= timedelta(days=1)
-        if max_days <= 0:
-            break
 
 
 def _parse_day_folder(date: str) -> datetime.date:
@@ -312,8 +306,8 @@ def download_files(required_brdf_tiles: Set[str],
                    password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
                    max_retries: int = 0,
                    max_queue_size: int = 3,
-                   max_workers: int = 1,
-                   max_downloads: int = 1,
+                   max_workers: int = 3,
+                   max_downloads: int = sys.maxsize,
                    clean_up: bool = False,
                    no_older_than:datetime.date = None,
                    no_newer_than:datetime.date = None,
@@ -348,7 +342,7 @@ def download_files(required_brdf_tiles: Set[str],
                 try:
                     result = f.result()
                     if result:
-                        LOG.info("completed_path", result)
+                        LOG.info("completed_path", result=result)
                 except:
                     LOG.exception("path_error")
 
@@ -381,13 +375,17 @@ def download_files(required_brdf_tiles: Set[str],
                         log.debug('skip_existing', output_h5=expected_output_h5)
                         continue
 
+                    last_queue_log = 0
                     while active_task_count >= max_queue_size:
-                        log.debug(
-                            "full_queue",
-                            active_task_count=active_task_count,
-                            max_queue_size=max_queue_size,
-                            task_count=len(tasks),
-                        )
+                        # Don't log more often than every 10 seconds if stuck here.
+                        if time.monotonic() - last_queue_log > 10:
+                            log.debug(
+                                "full_queue",
+                                active_task_count=active_task_count,
+                                max_queue_size=max_queue_size,
+                                task_count=len(tasks),
+                            )
+                        last_queue_log = time.monotonic()
                         wait_for_future(
                             tasks, return_when="FIRST_COMPLETED", timeout=10
                         )
@@ -508,6 +506,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
         subprocess.run(
             cmd,
             check=True,
+            stdout=subprocess.PIPE,
         )
     except subprocess.CalledProcessError as e:
         LOG.exception(f'error: {e.output.decode()}')
@@ -525,6 +524,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     final_output_file = out_dir / expected_output_file.name
     expected_output_file.rename(final_output_file)
 
+    LOG.debug('cleaning_up', tmp_output=tmp_output)
     tmp_output.rmdir()
 
     return final_output_file

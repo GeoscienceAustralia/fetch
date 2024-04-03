@@ -585,4 +585,11 @@ def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folde
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description='Download and convert MCD43A1 files from USGS')
+    parser.add_argument('--offshore-tiles', action='store_true', default=True, help='Download the offshore tiles')
+    parser.add_argument('--mainland-tiles', action='store_true', help='Download the mainland tiles')
+    parser.add_argument('--output-folder', type=Path, help='Output folder', required=True)
+    parser.add_argument('--min-age-days', type=int, default=30, help='Minimum age of files to download')
+    args = parser.parse_args()
+    main(**vars(args))

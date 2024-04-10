@@ -205,42 +205,47 @@ class BrdfClient:
         while True:
             LOG.info("get_with_retries", url=url, retries=retries)
             response = None
-            request = self.session.build_request("GET", url)
-            while request is not None:
 
-                # Delay if needed, to not request more often than allowed.
-                next_request_allowed_in = (self.last_request_monotonic + self.min_request_period_secs) - time.monotonic()
-                if next_request_allowed_in > 0:
-                    time.sleep(next_request_allowed_in)
+            try:
+                request = self.session.build_request("GET", url)
+                while request is not None:
+                    # Delay if needed, to not request more often than allowed.
+                    next_request_allowed_in = (self.last_request_monotonic + self.min_request_period_secs) - time.monotonic()
+                    if next_request_allowed_in > 0:
+                        time.sleep(next_request_allowed_in)
 
-                args = {}
-                if include_auth:
-                    if not self.username or not self.password:
-                        raise ValueError("No username/password supplied, but operation requires auth")
-                    args['auth'] = (self.username, self.password)
+                    args = {}
+                    if include_auth:
+                        if not self.username or not self.password:
+                            raise ValueError("No username/password supplied, but operation requires auth")
+                        args['auth'] = (self.username, self.password)
 
-                response = self.session.send(request, **args, follow_redirects=False)
+                    response = self.session.send(request, **args, follow_redirects=False)
 
-                headers_used = dict(request.headers.items())
-                request = response.next_request
+                    headers_used = dict(request.headers.items())
+                    request = response.next_request
 
-                self.last_request_monotonic = time.monotonic()
+                    self.last_request_monotonic = time.monotonic()
 
-                if include_auth and request and request.url.host in self.TRUSTED_HOSTS:
-                    if not headers_used['authorization']:
-                        raise RuntimeError(f"Expected to have an authorization header for {request.url}")
-                    request.headers['authorization'] = headers_used['authorization']
+                    if include_auth and request and request.url.host in self.TRUSTED_HOSTS:
+                        if not headers_used['authorization']:
+                            raise RuntimeError(f"Expected to have an authorization header for {request.url}")
+                        request.headers['authorization'] = headers_used['authorization']
 
-            if response.is_success:
+            except httpx.ReadTimeout:
+                LOG.info(f"request_timeout", url=url)
+
+            if response and response.is_success:
                 break
 
             if retries >= self.max_retries:
+                message = f"status_code: {response.status_code}, message: {response.content.decode()}" if response else "timeout"
                 raise RuntimeError(
-                    f"Failed to retrieve {url} after {retries} retries, message: {response.content.decode()}"
+                    f"Failed to retrieve {url} after {retries} retries. {message}"
                 )
 
             LOG.info(
-                f"Failed to retrieve {url}, status code: {response.status_code}, retrying in {delay} seconds"
+                f"Failed to retrieve {url}, retrying in {delay} seconds"
             )
             retries += 1
             time.sleep(delay)
@@ -329,11 +334,11 @@ def download_files(required_brdf_tiles: Set[str],
                    output_base_path: Path,
                    username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
                    password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
-                   max_retries: int = 0,
+                   max_retries: int = 1,
                    max_queue_size: int = 3,
                    max_workers: int = 3,
                    max_downloads: int = sys.maxsize,
-                   clean_up: bool = False,
+                   clean_up: bool = True,
                    no_older_than:datetime.date = None,
                    no_newer_than:datetime.date = None,
                    ):
@@ -471,7 +476,7 @@ def download_and_convert(
         url_set: Tuple[URL, URL],
         staging_folder: Path,
         output_folder: Path,
-        clean_up: bool = False,
+        clean_up: bool = True,
 ) -> Optional[Path]:
     # (Yes, Client is thread safe, and more efficient than a client-per-thread:
     #  https://github.com/encode/httpx/discussions/1633)
@@ -545,9 +550,6 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     final_output_file = out_dir / expected_output_file.name
     expected_output_file.rename(final_output_file)
-
-    LOG.debug('cleaning_up', tmp_output=tmp_output)
-    tmp_output.rmdir()
 
     return final_output_file
 

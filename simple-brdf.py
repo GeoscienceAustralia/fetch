@@ -30,8 +30,6 @@ urllib3.util.connection.HAS_IPV6 = False
 import socket
 socket.has_ipv6 = False
 
-COOKIE_JAR = os.path.expanduser("~/.urs_cookies")
-
 # One hour
 LOGIN_TIMEOUT_SECONDS = 60 * 60
 
@@ -49,6 +47,33 @@ _BRDF_FILENAME_PATTERN = re.compile(
 )
 # Folder pattern YYYY.MM.DD
 _DATE_FOLDER_PATTERN = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}")
+
+
+def get_working_dir(path: Path, create=True) -> Path:
+    """
+    Get a working directory we could use for processing in the given path.
+
+    It should always be on the same drive, so that we can rename the file into place.
+
+    >>> get_working_dir(Path('/g/data/v10/eoancillarydata-2/BRDF/MCD43A1.061/2024.03.15/A2024075'), create=False)
+    PosixPath('/g/data/v10/eoancillarydata-2/.tmp-work/BRDF/MCD43A1.061/2024.03.15/A2024075')
+    """
+    # Check if the path is a Path object
+    if not isinstance(path, Path):
+        raise TypeError(f"Expected a Path object, but got {type(path)}")
+
+    expected_prefix = Path('/g/data/v10/eoancillarydata-2')
+    if not path.is_absolute() or not str(path).startswith(str(expected_prefix)):
+        raise ValueError(f"Expected path to start with '{expected_prefix}', but got '{path}'")
+
+    relative_path = path.relative_to(expected_prefix)
+
+    temp_prefix = expected_prefix / '.tmp-work'
+    temp_path = temp_prefix / relative_path
+    if create:
+        temp_path.mkdir(parents=True, exist_ok=True)
+
+    return temp_path
 
 
 def parse_acq_date(acquisition_date: str) -> dt.date:
@@ -77,7 +102,7 @@ class BrdfClient:
                  max_retries: Optional[int] = 3,
                  username: Optional[str] = None,
                  password: Optional[str] = None,
-                 min_request_period_secs: Optional[float] = 0.3,
+                 min_request_period_secs: Optional[float] = 0.15,
                  ):
 
         self.max_retries = max_retries
@@ -324,8 +349,6 @@ def download_files(required_brdf_tiles: Set[str],
                          "(nor EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables)")
 
     log = LOG
-    download_tmp = output_base_path / ".tmp"
-    download_tmp.mkdir(parents=True, exist_ok=True)
     count = 0
 
     with BrdfClient(max_retries=max_retries, username=username, password=password) as client:
@@ -342,7 +365,7 @@ def download_files(required_brdf_tiles: Set[str],
                 try:
                     result = f.result()
                     if result:
-                        LOG.info("completed_path", result=result)
+                        LOG.info("completed_path", result=str(result))
                 except:
                     LOG.exception("path_error")
 
@@ -358,8 +381,7 @@ def download_files(required_brdf_tiles: Set[str],
             ):
                 log = LOG.bind(date=date)
                 target_dir = output_base_path / f"{date:%Y.%m.%d}"
-                staging_dir = output_base_path / ".tmp.staging" / f"{date:%Y.%m.%d}"
-                staging_dir.mkdir(parents=True, exist_ok=True)
+                staging_dir = get_working_dir(target_dir)
 
                 log.info("running_day", possible_missing_tiles=missing_tiles)
 
@@ -482,8 +504,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
             "Cannot do conversion to h5 until both are downloaded: .hdf and .hdf.xml"
         )
 
-    tmp_output = out_dir / f".tmp.convert.{input_hdf_file.stem}"
-    tmp_output.mkdir(parents=True, exist_ok=True)
+    tmp_output = get_working_dir(out_dir)
 
     try:
         cmd = (
@@ -521,6 +542,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     # (TODO: this should be avoidable using umask?)
     expected_output_file.chmod(expected_output_file.stat().st_mode | 0o40)
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     final_output_file = out_dir / expected_output_file.name
     expected_output_file.rename(final_output_file)
 
@@ -531,7 +553,8 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 
 
 def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folder=Path("test_out"),
-        min_age_days=30):
+         start_date:datetime.date = None,
+        end_date:datetime.date = None, min_age_days=None):
     # The two offshore tiles, then the whole range of Australian tiles.
     brdf_tiles = set()
 
@@ -545,8 +568,13 @@ def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folde
         assert 'h27v09' in brdf_tiles
         assert 'h32v13' in brdf_tiles
 
-    no_newer_than = (datetime.datetime.now() - timedelta(days=min_age_days)).date()
-    no_older_than = None
+    no_newer_than = None
+    if end_date:
+        no_newer_than = end_date
+    elif min_age_days:
+        no_newer_than = (datetime.datetime.now() - timedelta(days=min_age_days)).date()
+
+    no_older_than = start_date
 
     import logging
 
@@ -590,6 +618,14 @@ if __name__ == "__main__":
     parser.add_argument('--offshore-tiles', action='store_true', default=True, help='Download the offshore tiles')
     parser.add_argument('--mainland-tiles', action='store_true', help='Download the mainland tiles')
     parser.add_argument('--output-folder', type=Path, help='Output folder', required=True)
-    parser.add_argument('--min-age-days', type=int, default=30, help='Minimum age of files to download')
+    parser.add_argument('--min-age-days', type=int, default=None, help='Minimum age of files to download')
+    parser.add_argument('--start-date',
+                        type=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date(),
+                        default=None,
+                        help='Oldest date to download')
+    parser.add_argument('--end-date',
+                        type=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date(),
+                        default=None,
+                        help='Newest date to download')
     args = parser.parse_args()
     main(**vars(args))

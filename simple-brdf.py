@@ -26,8 +26,10 @@ from lxml import etree
 
 # ipv6 was not working on the gadi-dm NCI node.
 import urllib3.util.connection
+
 urllib3.util.connection.HAS_IPV6 = False
 import socket
+
 socket.has_ipv6 = False
 
 # One hour
@@ -62,13 +64,15 @@ def get_working_dir(path: Path, create=True) -> Path:
     if not isinstance(path, Path):
         raise TypeError(f"Expected a Path object, but got {type(path)}")
 
-    expected_prefix = Path('/g/data/v10/eoancillarydata-2')
+    expected_prefix = Path("/g/data/v10/eoancillarydata-2")
     if not path.is_absolute() or not str(path).startswith(str(expected_prefix)):
-        raise ValueError(f"Expected path to start with '{expected_prefix}', but got '{path}'")
+        raise ValueError(
+            f"Expected path to start with '{expected_prefix}', but got '{path}'"
+        )
 
     relative_path = path.relative_to(expected_prefix)
 
-    temp_prefix = expected_prefix / '.tmp-work'
+    temp_prefix = expected_prefix / ".tmp-work"
     temp_path = temp_prefix / relative_path
     if create:
         temp_path.mkdir(parents=True, exist_ok=True)
@@ -97,16 +101,19 @@ class BrdfClient:
         "e4ftl01.cr.usgs.gov",
         "urs.earthdata.nasa.gov",
     }
-    def __init__(self,
-                 *,
-                 max_retries: Optional[int] = 3,
-                 username: Optional[str] = None,
-                 password: Optional[str] = None,
-                 min_request_period_secs: Optional[float] = 0.15,
-                 ):
 
+    def __init__(
+        self,
+        *,
+        max_retries: Optional[int] = 3,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        min_request_period_secs: Optional[float] = 0.15,
+    ):
         self.max_retries = max_retries
-        self.service_root_url: URL = URL("https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.061/")
+        self.service_root_url: URL = URL(
+            "https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.061/"
+        )
 
         self.username = username
         self.password = password
@@ -164,7 +171,7 @@ class BrdfClient:
         )
 
     def find_available_remote_files(
-            self, date: dt.date, tile_numbers: Optional[Set[str]] = None
+        self, date: dt.date, tile_numbers: Optional[Set[str]] = None
     ) -> Iterator[Tuple[URL, URL]]:
         """
         This will return a list of available HDF file sets for the given date.
@@ -189,11 +196,11 @@ class BrdfClient:
                 continue
 
             # Make sure we have a matching `.hdf.xml` file.
-            expected_xml_url = URL(str(file_url) + '.xml')
+            expected_xml_url = URL(str(file_url) + ".xml")
 
             if expected_xml_url not in file_urls:
                 # Perhaps it's still being generated. This should rarely happen, if ever?
-                LOG.info('remote_brdf_without_xml', brdf_url=file_url)
+                LOG.info("remote_brdf_without_xml", brdf_url=file_url)
                 continue
 
             # A pair of .hdf and .hdf.xml files
@@ -210,27 +217,39 @@ class BrdfClient:
                 request = self.session.build_request("GET", url)
                 while request is not None:
                     # Delay if needed, to not request more often than allowed.
-                    next_request_allowed_in = (self.last_request_monotonic + self.min_request_period_secs) - time.monotonic()
+                    next_request_allowed_in = (
+                        self.last_request_monotonic + self.min_request_period_secs
+                    ) - time.monotonic()
                     if next_request_allowed_in > 0:
                         time.sleep(next_request_allowed_in)
 
                     args = {}
                     if include_auth:
                         if not self.username or not self.password:
-                            raise ValueError("No username/password supplied, but operation requires auth")
-                        args['auth'] = (self.username, self.password)
+                            raise ValueError(
+                                "No username/password supplied, but operation requires auth"
+                            )
+                        args["auth"] = (self.username, self.password)
 
-                    response = self.session.send(request, **args, follow_redirects=False)
+                    response = self.session.send(
+                        request, **args, follow_redirects=False
+                    )
 
                     headers_used = dict(request.headers.items())
                     request = response.next_request
 
                     self.last_request_monotonic = time.monotonic()
 
-                    if include_auth and request and request.url.host in self.TRUSTED_HOSTS:
-                        if not headers_used['authorization']:
-                            raise RuntimeError(f"Expected to have an authorization header for {request.url}")
-                        request.headers['authorization'] = headers_used['authorization']
+                    if (
+                        include_auth
+                        and request
+                        and request.url.host in self.TRUSTED_HOSTS
+                    ):
+                        if not headers_used["authorization"]:
+                            raise RuntimeError(
+                                f"Expected to have an authorization header for {request.url}"
+                            )
+                        request.headers["authorization"] = headers_used["authorization"]
 
             except httpx.ReadTimeout:
                 LOG.info(f"request_timeout", url=url)
@@ -239,14 +258,16 @@ class BrdfClient:
                 break
 
             if retries >= self.max_retries:
-                message = f"status_code: {response.status_code}, message: {response.content.decode()}" if response else "timeout"
+                message = (
+                    f"status_code: {response.status_code}, message: {response.content.decode()}"
+                    if response
+                    else "timeout"
+                )
                 raise RuntimeError(
                     f"Failed to retrieve {url} after {retries} retries. {message}"
                 )
 
-            LOG.info(
-                f"Failed to retrieve {url}, retrying in {delay} seconds"
-            )
+            LOG.info(f"Failed to retrieve {url}, retrying in {delay} seconds")
             retries += 1
             time.sleep(delay)
             delay *= 2
@@ -269,9 +290,7 @@ class BrdfClient:
         if path.exists():
             log.info("already_downloaded", path=path)
             return path
-        tmp_path = path.with_name(
-            f".incomplete.{path.name}"
-        )
+        tmp_path = path.with_name(f".incomplete.{path.name}")
 
         # We aren't doing chunked as these are small.
         response = self._get_with_retries(url, include_auth=True)
@@ -284,10 +303,10 @@ class BrdfClient:
 
 
 def find_days_with_missing_brdf_tiles(
-        folder: Path,
-        expected_brdf_tiles: Iterable[str],
-        start_date: Optional[dt.date],
-        end_date: Optional[dt.date],
+    folder: Path,
+    expected_brdf_tiles: Iterable[str],
+    start_date: Optional[dt.date],
+    end_date: Optional[dt.date],
 ) -> Iterator[Tuple[dt.date, Set[str]]]:
     """
     For all dates in the folder, yield any dates without the full set of expected brdf tiles.
@@ -330,18 +349,19 @@ def _parse_day_folder(date: str) -> datetime.date:
 _unset = object()
 
 
-def download_files(required_brdf_tiles: Set[str],
-                   output_base_path: Path,
-                   username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
-                   password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
-                   max_retries: int = 1,
-                   max_queue_size: int = 3,
-                   max_workers: int = 3,
-                   max_downloads: int = sys.maxsize,
-                   clean_up: bool = True,
-                   no_older_than:datetime.date = None,
-                   no_newer_than:datetime.date = None,
-                   ):
+def download_files(
+    required_brdf_tiles: Set[str],
+    output_base_path: Path,
+    username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
+    password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
+    max_retries: int = 1,
+    max_queue_size: int = 3,
+    max_workers: int = 3,
+    max_downloads: int = sys.maxsize,
+    clean_up: bool = True,
+    no_older_than: datetime.date = None,
+    no_newer_than: datetime.date = None,
+):
     """
     Download and convert MCD43A1 files from USGS
 
@@ -350,13 +370,17 @@ def download_files(required_brdf_tiles: Set[str],
     :param no_newer_than:
     """
     if username is _unset or password is _unset:
-        raise ValueError("No username/password supplied "
-                         "(nor EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables)")
+        raise ValueError(
+            "No username/password supplied "
+            "(nor EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables)"
+        )
 
     log = LOG
     count = 0
 
-    with BrdfClient(max_retries=max_retries, username=username, password=password) as client:
+    with BrdfClient(
+        max_retries=max_retries, username=username, password=password
+    ) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
 
@@ -382,7 +406,7 @@ def download_files(required_brdf_tiles: Set[str],
                 end_date = no_newer_than
 
             for date, missing_tiles in find_days_with_missing_brdf_tiles(
-                    output_base_path, required_brdf_tiles, start_date, end_date
+                output_base_path, required_brdf_tiles, start_date, end_date
             ):
                 log = LOG.bind(date=date)
                 target_dir = output_base_path / f"{date:%Y.%m.%d}"
@@ -391,15 +415,15 @@ def download_files(required_brdf_tiles: Set[str],
                 log.info("running_day", possible_missing_tiles=missing_tiles)
 
                 for hdf_url, hdf_xml_url in client.find_available_remote_files(
-                        date, tile_numbers=required_brdf_tiles
+                    date, tile_numbers=required_brdf_tiles
                 ):
                     hdf_name = url_filename(hdf_url)
 
                     log = log.bind(hdf_name=hdf_name)
 
-                    expected_output_h5 = target_dir / hdf_name.replace('.hdf', '.h5')
+                    expected_output_h5 = target_dir / hdf_name.replace(".hdf", ".h5")
                     if expected_output_h5.exists():
-                        log.debug('skip_existing', output_h5=expected_output_h5)
+                        log.debug("skip_existing", output_h5=expected_output_h5)
                         continue
 
                     last_queue_log = 0
@@ -420,11 +444,13 @@ def download_files(required_brdf_tiles: Set[str],
                     # Do the first synchronously, no concurrency, to save the auth cookies first.
                     # A slow ramp-up is fine.
                     if count < 1:
-                        download_and_convert(client,
-                                             (hdf_url, hdf_xml_url),
-                                             staging_dir,
-                                             target_dir,
-                                             clean_up)
+                        download_and_convert(
+                            client,
+                            (hdf_url, hdf_xml_url),
+                            staging_dir,
+                            target_dir,
+                            clean_up,
+                        )
                     else:
                         task: Future = executor.submit(
                             download_and_convert,
@@ -468,15 +494,15 @@ def url_filename(url: URL) -> str:
     >>> url_filename(u)
     'MCD43A1.A2002102.h23v01.061.2020087195553.hdf'
     """
-    return url.path.rstrip('/').split("/")[-1]
+    return url.path.rstrip("/").split("/")[-1]
 
 
 def download_and_convert(
-        client: BrdfClient,
-        url_set: Tuple[URL, URL],
-        staging_folder: Path,
-        output_folder: Path,
-        clean_up: bool = True,
+    client: BrdfClient,
+    url_set: Tuple[URL, URL],
+    staging_folder: Path,
+    output_folder: Path,
+    clean_up: bool = True,
 ) -> Optional[Path]:
     # (Yes, Client is thread safe, and more efficient than a client-per-thread:
     #  https://github.com/encode/httpx/discussions/1633)
@@ -491,9 +517,9 @@ def download_and_convert(
         log.error("download_failed", hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
         return
 
-    log.info('converting', hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
+    log.info("converting", hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
     output_h5_path = convert_to_h5(hdf_path, output_folder, log=log)
-    log.info('converted', output_h5_path=output_h5_path)
+    log.info("converted", output_h5_path=output_h5_path)
 
     if clean_up:
         hdf_path.unlink()
@@ -525,17 +551,14 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
             "--compression",
             "BLOSC_ZSTANDARD",
         )
-        log.debug(
-            'swfo-cmd',
-            cmd=' '.join(shlex.quote(str(arg)) for arg in cmd)
-        )
+        log.debug("swfo-cmd", cmd=" ".join(shlex.quote(str(arg)) for arg in cmd))
         subprocess.run(
             cmd,
             check=True,
             stdout=subprocess.PIPE,
         )
     except subprocess.CalledProcessError as e:
-        LOG.exception(f'error: {e.output.decode()}')
+        LOG.exception(f"error: {e.output.decode()}")
 
     expected_output_file = tmp_output / input_hdf_file.with_suffix(".h5").name
     if not expected_output_file.exists():
@@ -554,21 +577,26 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     return final_output_file
 
 
-def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folder=Path("test_out"),
-         start_date:datetime.date = None,
-        end_date:datetime.date = None, min_age_days=None):
+def main(
+    offshore_tiles: bool = True,
+    mainland_tiles: bool = False,
+    output_folder=Path("test_out"),
+    start_date: datetime.date = None,
+    end_date: datetime.date = None,
+    min_age_days=None,
+):
     # The two offshore tiles, then the whole range of Australian tiles.
     brdf_tiles = set()
 
     if offshore_tiles:
-        brdf_tiles.update({'h22v14', 'h27v14'})
+        brdf_tiles.update({"h22v14", "h27v14"})
     if mainland_tiles:
         for h in range(27, 33):
             for v in range(9, 14):
                 brdf_tiles.add(f"h{h:02d}v{v:02d}")
         # Two corners. No off-by-one errors
-        assert 'h27v09' in brdf_tiles
-        assert 'h32v13' in brdf_tiles
+        assert "h27v09" in brdf_tiles
+        assert "h32v13" in brdf_tiles
 
     no_newer_than = None
     if end_date:
@@ -610,24 +638,46 @@ def main(offshore_tiles: bool = True, mainland_tiles: bool = False, output_folde
     download_files(
         required_brdf_tiles=brdf_tiles,
         output_base_path=output_folder,
-        no_older_than=no_older_than, no_newer_than=no_newer_than,
+        no_older_than=no_older_than,
+        no_newer_than=no_newer_than,
     )
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Download and convert MCD43A1 files from USGS')
-    parser.add_argument('--offshore-tiles', action='store_true', default=True, help='Download the offshore tiles')
-    parser.add_argument('--mainland-tiles', action='store_true', help='Download the mainland tiles')
-    parser.add_argument('--output-folder', type=Path, help='Output folder', required=True)
-    parser.add_argument('--min-age-days', type=int, default=None, help='Minimum age of files to download')
-    parser.add_argument('--start-date',
-                        type=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date(),
-                        default=None,
-                        help='Oldest date to download')
-    parser.add_argument('--end-date',
-                        type=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date(),
-                        default=None,
-                        help='Newest date to download')
+
+    parser = argparse.ArgumentParser(
+        description="Download and convert MCD43A1 files from USGS"
+    )
+    parser.add_argument(
+        "--offshore-tiles",
+        action="store_true",
+        default=True,
+        help="Download the offshore tiles",
+    )
+    parser.add_argument(
+        "--mainland-tiles", action="store_true", help="Download the mainland tiles"
+    )
+    parser.add_argument(
+        "--output-folder", type=Path, help="Output folder", required=True
+    )
+    parser.add_argument(
+        "--min-age-days",
+        type=int,
+        default=None,
+        help="Minimum age of files to download",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=lambda x: datetime.datetime.strptime(x, "%Y-%m-%d").date(),
+        default=None,
+        help="Oldest date to download",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=lambda x: datetime.datetime.strptime(x, "%Y-%m-%d").date(),
+        default=None,
+        help="Newest date to download",
+    )
     args = parser.parse_args()
     main(**vars(args))

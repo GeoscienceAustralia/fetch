@@ -19,6 +19,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Set, Tuple
 
+import socket
 import httpx
 import structlog
 from httpx import URL
@@ -28,7 +29,7 @@ from lxml import etree
 import urllib3.util.connection
 
 urllib3.util.connection.HAS_IPV6 = False
-import socket
+
 
 socket.has_ipv6 = False
 
@@ -109,6 +110,7 @@ class BrdfClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         min_request_period_secs: Optional[float] = 0.15,
+        request_timeout_secs: Optional[float] = 90,
     ):
         self.max_retries = max_retries
         self.service_root_url: URL = URL(
@@ -118,7 +120,7 @@ class BrdfClient:
         self.username = username
         self.password = password
 
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=request_timeout_secs)
 
         self.min_request_period_secs = min_request_period_secs
         self.last_request_monotonic = time.monotonic() - min_request_period_secs - 1.0
@@ -208,7 +210,7 @@ class BrdfClient:
 
     def _get_with_retries(self, url: URL, include_auth=False) -> httpx.Response:
         retries = 0
-        delay = 2
+        delay = 5
         while True:
             LOG.info("get_with_retries", url=url, retries=retries)
             response = None
@@ -252,7 +254,7 @@ class BrdfClient:
                         request.headers["authorization"] = headers_used["authorization"]
 
             except httpx.ReadTimeout:
-                LOG.info(f"request_timeout", url=url)
+                LOG.info("request_timeout", url=url)
 
             if response and response.is_success:
                 break
@@ -354,7 +356,7 @@ def download_files(
     output_base_path: Path,
     username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
     password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
-    max_retries: int = 1,
+    max_retries: int = 4,
     max_queue_size: int = 3,
     max_workers: int = 3,
     max_downloads: int = sys.maxsize,
@@ -395,7 +397,7 @@ def download_files(
                     result = f.result()
                     if result:
                         LOG.info("completed_path", result=str(result))
-                except:
+                except Exception:
                     LOG.exception("path_error")
 
             # Clamp the date range if needed.

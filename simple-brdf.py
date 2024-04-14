@@ -400,15 +400,12 @@ def download_files(
                 except Exception:
                     LOG.exception("path_error")
 
-            start_date = no_older_than
-            end_date = no_newer_than
-            if not start_date or not end_date:
-                min_start_date, max_end_date = client.find_available_date_range()
-                # Clamp the start/end dates to the available range.
-                if not start_date:
-                    start_date = min_start_date
-                if not end_date:
-                    end_date = max_end_date
+            start_date, end_date = client.find_available_date_range()
+            # Clamp the start/end dates to the available range.
+            if no_older_than:
+                start_date = max(start_date, no_older_than)
+            if no_newer_than:
+                end_date = min(end_date, no_newer_than)
 
             for date, missing_tiles in find_days_with_missing_brdf_tiles(
                 output_base_path, required_brdf_tiles, start_date, end_date

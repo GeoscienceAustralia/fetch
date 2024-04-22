@@ -110,7 +110,7 @@ class BrdfClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         min_request_period_secs: Optional[float] = 0.15,
-        request_timeout_secs: Optional[float] = 90,
+        request_timeout_secs: Optional[float] = 180,
     ):
         self.max_retries = max_retries
         self.service_root_url: URL = URL(

@@ -109,7 +109,7 @@ class BrdfClient:
         max_retries: Optional[int] = 3,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        min_request_period_secs: Optional[float] = 0.15,
+        min_request_period_secs: Optional[float] = 0.3,
         request_timeout_secs: Optional[float] = 180,
     ):
         self.max_retries = max_retries
@@ -139,6 +139,12 @@ class BrdfClient:
         (ie. folders and filenames linked to)
         """
         response = self._get_with_retries(url)
+
+        # This can be common as we're scanning through days of the year. Some may not exist yet.
+        if response.status_code == 404:
+            LOG.info("directory_not_found", url=url)
+            return
+
         page = etree.fromstring(response.text, parser=etree.HTMLParser())
         for anchor in page.xpath("//a"):
             name = anchor.text
@@ -256,7 +262,7 @@ class BrdfClient:
             except httpx.ReadTimeout:
                 LOG.info("request_timeout", url=url)
 
-            if response and response.is_success:
+            if response and (response.is_success or response.status_code == 404):
                 break
 
             if retries >= self.max_retries:

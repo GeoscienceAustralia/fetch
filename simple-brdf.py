@@ -1,8 +1,8 @@
 import datetime
 import os
-
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -19,17 +19,15 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Set, Tuple
 
-import socket
 import httpx
 import structlog
-from httpx import URL
-from lxml import etree
 
 # ipv6 was not working on the gadi-dm NCI node.
 import urllib3.util.connection
+from httpx import URL
+from lxml import etree
 
 urllib3.util.connection.HAS_IPV6 = False
-
 
 socket.has_ipv6 = False
 
@@ -46,10 +44,16 @@ LOG = structlog.get_logger()
 # We convert them into one .h5 file.
 #
 _BRDF_FILENAME_PATTERN = re.compile(
-    r"MCD43A1\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.061\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z]+)$"
+    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.061\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z]+)$"
 )
 # Folder pattern YYYY.MM.DD
 _DATE_FOLDER_PATTERN = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}")
+
+_KNOWN_PRODUCTS = {
+    "modis": ("MOTA/MCD43A1.061", "BRDF/MCD43A1.061"),
+    "viirs_m": ("VIIRS/VNP43MA1.001", "BRDF/VNP43MA1.001"),
+    "viirs_i": ("VIIRS/VNP43IA1.001", "BRDF/VNP43IA1.001"),
+}
 
 
 def get_working_dir(path: Path, create=True) -> Path:
@@ -105,6 +109,7 @@ class BrdfClient:
 
     def __init__(
         self,
+        product_offset: str,
         *,
         max_retries: Optional[int] = 3,
         username: Optional[str] = None,
@@ -113,8 +118,9 @@ class BrdfClient:
         request_timeout_secs: Optional[float] = 180,
     ):
         self.max_retries = max_retries
+
         self.service_root_url: URL = URL(
-            "https://e4ftl01.cr.usgs.gov/MOTA/MCD43A1.061/"
+            f"https://e4ftl01.cr.usgs.gov/{product_offset}/"
         )
 
         self.username = username
@@ -358,6 +364,7 @@ _unset = object()
 
 
 def download_files(
+    product: str,
     required_brdf_tiles: Set[str],
     output_base_path: Path,
     username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
@@ -385,9 +392,19 @@ def download_files(
 
     log = LOG
     count = 0
+    if product not in _KNOWN_PRODUCTS:
+        raise ValueError(
+            f"Unknown product {product}. Must be one of {_KNOWN_PRODUCTS.keys()}"
+        )
+
+    product_offset, output_offset = _KNOWN_PRODUCTS[product]
+    output_base_path = output_base_path / output_offset
 
     with BrdfClient(
-        max_retries=max_retries, username=username, password=password
+        product_offset=product_offset,
+        max_retries=max_retries,
+        username=username,
+        password=password,
     ) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
@@ -515,25 +532,43 @@ def download_and_convert(
     # (Yes, Client is thread safe, and more efficient than a client-per-thread:
     #  https://github.com/encode/httpx/discussions/1633)
 
-    hdf_url, hdf_xml_url = url_set
-    log = LOG.bind(hdf_name=url_filename(hdf_url))
+    file_url, file_xml_url = url_set
+    log = LOG.bind(hdf_name=url_filename(file_url))
 
-    hdf_path = client.download_file(hdf_url, staging_folder)
-    hdf_xml_path = client.download_file(hdf_xml_url, staging_folder)
+    file_path = client.download_file(file_url, staging_folder)
+    file_xml_path = client.download_file(file_xml_url, staging_folder)
 
-    if hdf_path is None or hdf_xml_path is None:
-        log.error("download_failed", hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
+    if file_path is None or file_xml_path is None:
+        log.error("download_failed", hdf_path=file_path, hdf_xml_path=file_xml_path)
         return
 
-    log.info("converting", hdf_path=hdf_path, hdf_xml_path=hdf_xml_path)
-    output_h5_path = convert_to_h5(hdf_path, output_folder, log=log)
-    log.info("converted", output_h5_path=output_h5_path)
+    # VIIRS comes as h5, so no conversion needed!
+    # [   ] VNP43MA1.A2024276.h32v10.001.2024284200753.h5
+    # [   ] VNP43MA1.A2024276.h32v10.001.2024284200753.h5.xml
+    if file_path.suffix == ".hdf":
+        do_convert = True
+    elif file_path.suffix == ".h5":
+        do_convert = False
+    else:
+        raise ValueError(f"Unknown file type: {file_path.suffix}")
 
-    if clean_up:
-        hdf_path.unlink()
-        hdf_xml_path.unlink()
+    if do_convert:
+        log.info("converting", hdf_path=file_path, hdf_xml_path=file_xml_path)
+        final_path = convert_to_h5(file_path, output_folder, log=log)
+        log.info("converted", output_h5_path=final_path)
+        if clean_up:
+            file_path.unlink()
+            file_xml_path.unlink()
+    else:
+        # Move the files without converting
+        output_folder.mkdir(parents=True, exist_ok=True)
+        output_hdf_path = output_folder / file_path.name
+        output_xml_path = output_folder / file_xml_path.name
+        file_path.rename(output_hdf_path)
+        file_xml_path.rename(output_xml_path)
+        final_path = file_path
 
-    return output_h5_path
+    return final_path
 
 
 def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
@@ -586,6 +621,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 
 
 def main(
+    product: str,
     offshore_tiles: bool = True,
     mainland_tiles: bool = False,
     output_folder=Path("test_out"),
@@ -593,6 +629,11 @@ def main(
     end_date: datetime.date = None,
     min_age_days=None,
 ):
+    if product not in _KNOWN_PRODUCTS.keys():
+        raise ValueError(
+            f"Unknown product {product}. Known products are {list(_KNOWN_PRODUCTS.keys())}"
+        )
+
     # The two offshore tiles, then the whole range of Australian tiles.
     brdf_tiles = set()
 
@@ -644,6 +685,7 @@ def main(
         cache_logger_on_first_use=False,
     )
     download_files(
+        product=product,
         required_brdf_tiles=brdf_tiles,
         output_base_path=output_folder,
         no_older_than=no_older_than,
@@ -655,7 +697,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Download and convert MCD43A1 files from USGS"
+        description="Download and convert brdf files from USGS"
+    )
+    parser.add_argument(
+        "product",
+        type=str,
+        required=True,
+        choices=list(_KNOWN_PRODUCTS.keys()),
+        help="BRDF product type to download",
     )
     parser.add_argument(
         "--offshore-tiles",

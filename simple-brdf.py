@@ -44,7 +44,7 @@ LOG = structlog.get_logger()
 # We convert them into one .h5 file.
 #
 _BRDF_FILENAME_PATTERN = re.compile(
-    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.061\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z]+)$"
+    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.[0-9]{3}\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z5]+)$"
 )
 # Folder pattern YYYY.MM.DD
 _DATE_FOLDER_PATTERN = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}")
@@ -69,7 +69,7 @@ def get_working_dir(path: Path, create=True) -> Path:
     if not isinstance(path, Path):
         raise TypeError(f"Expected a Path object, but got {type(path)}")
 
-    expected_prefix = Path("/g/data/v10/eoancillarydata-2")
+    expected_prefix = Path("/g/data/v10")
     if not path.is_absolute() or not str(path).startswith(str(expected_prefix)):
         raise ValueError(
             f"Expected path to start with '{expected_prefix}', but got '{path}'"
@@ -205,8 +205,8 @@ class BrdfClient:
             if tile_numbers and match.group("tile_number") not in tile_numbers:
                 continue
 
-            # Make sure it's the .hdf extension (we don't need to yield the .hdf.xml separately)
-            if match.group("extension") != ".hdf":
+            # Make sure it's the data extension (we don't need to yield the .hdf.xml separately)
+            if match.group("extension") not in (".hdf", ".h5"):
                 continue
 
             # Make sure we have a matching `.hdf.xml` file.
@@ -702,7 +702,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "product",
         type=str,
-        required=True,
         choices=list(_KNOWN_PRODUCTS.keys()),
         help="BRDF product type to download",
     )

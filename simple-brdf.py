@@ -621,9 +621,11 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 
 
 def main(
+    verbose: bool,
     product: str,
-    offshore_tiles: bool = True,
-    mainland_tiles: bool = False,
+    tiles_path: str = None,
+    include_offshore_tiles: bool = True,
+    include_mainland_tiles: bool = False,
     output_folder=Path("test_out"),
     start_date: datetime.date = None,
     end_date: datetime.date = None,
@@ -634,12 +636,16 @@ def main(
             f"Unknown product {product}. Known products are {list(_KNOWN_PRODUCTS.keys())}"
         )
 
-    # The two offshore tiles, then the whole range of Australian tiles.
-    brdf_tiles = set()
+    if tiles_path:
+        with open(tiles_path) as f:
+            brdf_tiles = {line.strip() for line in f}
+    else:
+        brdf_tiles = set()
 
-    if offshore_tiles:
+    if include_offshore_tiles:
+        # The two offshore tiles, then the whole range of Australian tiles.
         brdf_tiles.update({"h22v14", "h27v14"})
-    if mainland_tiles:
+    if include_mainland_tiles:
         for h in range(27, 33):
             for v in range(9, 14):
                 brdf_tiles.add(f"h{h:02d}v{v:02d}")
@@ -679,11 +685,25 @@ def main(
         ]
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+        wrapper_class=structlog.make_filtering_bound_logger(
+            logging.NOTSET if verbose else logging.INFO
+        ),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=False,
     )
+
+    log = structlog.get_logger()
+
+    log.info(
+        "starting_brdf",
+        product=product,
+        output_folder=output_folder,
+        start_date=no_older_than,
+        end_date=no_newer_than,
+    )
+    log.debug("selected_tiles", tiles=sorted(brdf_tiles))
+
     download_files(
         product=product,
         required_brdf_tiles=brdf_tiles,
@@ -706,16 +726,30 @@ if __name__ == "__main__":
         help="BRDF product type to download",
     )
     parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+    parser.add_argument(
         "--offshore-tiles",
         action="store_true",
-        default=True,
         help="Download the offshore tiles",
     )
     parser.add_argument(
         "--mainland-tiles", action="store_true", help="Download the mainland tiles"
     )
     parser.add_argument(
-        "--output-folder", type=Path, help="Output folder", required=True
+        "--tiles-path",
+        type=Path,
+        help="Path to optional tiles file (one per line)",
+        default=None,
+    )
+    parser.add_argument(
+        "--output-base",
+        type=Path,
+        help="Output folder",
+        default="/g/data/v10/eoancillarydata-2",
     )
     parser.add_argument(
         "--min-age-days",

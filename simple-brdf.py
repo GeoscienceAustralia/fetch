@@ -624,9 +624,9 @@ def main(
     verbose: bool,
     product: str,
     tiles_path: str = None,
-    include_offshore_tiles: bool = True,
-    include_mainland_tiles: bool = False,
-    output_folder=Path("test_out"),
+    no_offshore_tiles: bool = False,
+    no_mainland_tiles: bool = False,
+    output_base=Path("test_out"),
     start_date: datetime.date = None,
     end_date: datetime.date = None,
     min_age_days=None,
@@ -640,18 +640,18 @@ def main(
         with open(tiles_path) as f:
             brdf_tiles = {line.strip() for line in f}
     else:
+        # Otherwise populate our standard aoi.
         brdf_tiles = set()
-
-    if include_offshore_tiles:
-        # The two offshore tiles, then the whole range of Australian tiles.
-        brdf_tiles.update({"h22v14", "h27v14"})
-    if include_mainland_tiles:
-        for h in range(27, 33):
-            for v in range(9, 14):
-                brdf_tiles.add(f"h{h:02d}v{v:02d}")
-        # Two corners. No off-by-one errors
-        assert "h27v09" in brdf_tiles
-        assert "h32v13" in brdf_tiles
+        if not no_offshore_tiles:
+            # The two offshore tiles, then the whole range of Australian tiles.
+            brdf_tiles.update({"h22v14", "h27v14"})
+        if not no_mainland_tiles:
+            for h in range(27, 33):
+                for v in range(9, 14):
+                    brdf_tiles.add(f"h{h:02d}v{v:02d}")
+            # Two corners. No off-by-one errors
+            assert "h27v09" in brdf_tiles
+            assert "h32v13" in brdf_tiles
 
     no_newer_than = None
     if end_date:
@@ -698,7 +698,7 @@ def main(
     log.info(
         "starting_brdf",
         product=product,
-        output_folder=output_folder,
+        output_base=output_base,
         start_date=no_older_than,
         end_date=no_newer_than,
     )
@@ -707,7 +707,7 @@ def main(
     download_files(
         product=product,
         required_brdf_tiles=brdf_tiles,
-        output_base_path=output_folder,
+        output_base_path=output_base,
         no_older_than=no_older_than,
         no_newer_than=no_newer_than,
     )
@@ -732,17 +732,19 @@ if __name__ == "__main__":
         help="Enable verbose logging",
     )
     parser.add_argument(
-        "--offshore-tiles",
+        "--no-offshore-tiles",
         action="store_true",
-        help="Download the offshore tiles",
+        help="Skip downloading the offshore tiles",
     )
     parser.add_argument(
-        "--mainland-tiles", action="store_true", help="Download the mainland tiles"
+        "--no-mainland-tiles",
+        action="store_true",
+        help="Skip downloading the mainland tiles",
     )
     parser.add_argument(
         "--tiles-path",
         type=Path,
-        help="Path to optional tiles file (one per line)",
+        help="Path to an alternative tile list file (one per line)",
         default=None,
     )
     parser.add_argument(

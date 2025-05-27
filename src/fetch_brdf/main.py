@@ -718,7 +718,7 @@ def main(
     )
 
 
-if __name__ == "__main__":
+def cli():
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -778,3 +778,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main(**vars(args))
+
+
+if __name__ == "__main__":
+    cli()

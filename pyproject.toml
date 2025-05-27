@@ -1,10 +1,21 @@
 [project]
-dependencies = ["httpx>=0.28.1", "lxml>=5.4.0", "structlog>=25.3.0"]
+dependencies = [
+    "httpx>=0.28.1",
+    "lxml>=5.4.0",
+    "structlog>=25.3.0",
+    "urllib3>=2.4.0"
+]
 description = "Find and download missing BRDF"
 name = "fetch-brdf"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 version = "0.1.0"
 
 [project.scripts]
-fetch-brdf = "main:main"
+fetch-brdf = "fetch_brdf.main:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

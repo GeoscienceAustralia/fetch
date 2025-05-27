@@ -22,13 +22,13 @@ from typing import Iterable, Iterator, Optional, Set, Tuple
 import httpx
 import structlog
 
-# ipv6 was not working on the gadi-dm NCI node.
-import urllib3.util.connection
 from httpx import URL
 from lxml import etree
 
-urllib3.util.connection.HAS_IPV6 = False
+# ipv6 has issues to USGS from NCI. Disable it.
+import urllib3.util.connection
 
+urllib3.util.connection.HAS_IPV6 = False
 socket.has_ipv6 = False
 
 # One hour
@@ -54,6 +54,17 @@ _KNOWN_PRODUCTS = {
     "viirs_m": ("VIIRS/VNP43MA1.001", "BRDF/VNP43MA1.001"),
     "viirs_i": ("VIIRS/VNP43IA1.001", "BRDF/VNP43IA1.001"),
 }
+# Tiles are (h, v) coordinates, as seen in the filename
+TILE_SETS = {
+    # The whole range of australia
+    "mainland": tuple((h, v) for h in range(27, 33) for v in range(9, 14)),
+    # The two offshore tiles
+    "offshore": ((22, 14), (27, 14)),
+}
+# Two corners. No off-by-one errors
+assert (27, 9) in TILE_SETS["mainland"]
+assert (32, 13) in TILE_SETS["mainland"]
+assert (32, 14) not in TILE_SETS["mainland"]
 
 
 def get_working_dir(path: Path, create=True) -> Path:
@@ -643,15 +654,10 @@ def main(
         # Otherwise populate our standard aoi.
         brdf_tiles = set()
         if not no_offshore_tiles:
-            # The two offshore tiles, then the whole range of Australian tiles.
-            brdf_tiles.update({"h22v14", "h27v14"})
+            brdf_tiles.update(TILE_SETS["offshore"])
         if not no_mainland_tiles:
-            for h in range(27, 33):
-                for v in range(9, 14):
-                    brdf_tiles.add(f"h{h:02d}v{v:02d}")
-            # Two corners. No off-by-one errors
-            assert "h27v09" in brdf_tiles
-            assert "h32v13" in brdf_tiles
+            brdf_tiles.update(TILE_SETS["mainland"])
+        brdf_tiles = {f"h{h:02d}v{v:02d}" for h, v in brdf_tiles}
 
     no_newer_than = None
     if end_date:
@@ -694,7 +700,6 @@ def main(
     )
 
     log = structlog.get_logger()
-
     log.info(
         "starting_brdf",
         product=product,

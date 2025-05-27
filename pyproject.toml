@@ -1,0 +1,10 @@
+[project]
+dependencies = ["httpx>=0.28.1", "lxml>=5.4.0", "structlog>=25.3.0"]
+description = "Find and download missing BRDF"
+name = "fetch-brdf"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.1.0"
+
+[project.scripts]
+fetch-brdf = "main:main"

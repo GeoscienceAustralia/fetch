@@ -631,6 +631,21 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     return final_output_file
 
 
+def load_tiles_from_file(tiles_path: Path) -> Set[str]:
+    """Load and validate tile identifiers from file."""
+    tiles = set()
+    with open(tiles_path) as f:
+        for line_num, line in enumerate(f, 1):
+            # Remove comments and whitespace
+            tile = line.strip().split("#")[0].strip()
+            if not tile:
+                continue
+            if not re.match(r"^h\d{2}v\d{2}", tile):
+                raise ValueError(f"Invalid tile format '{tile}' on line {line_num}")
+            tiles.add(tile)
+    return tiles
+
+
 def main(
     verbose: bool,
     product: str,
@@ -648,8 +663,7 @@ def main(
         )
 
     if tiles_path:
-        with open(tiles_path) as f:
-            brdf_tiles = {line.strip() for line in f}
+        brdf_tiles = load_tiles_from_file(tiles_path)
     else:
         # Otherwise populate our standard aoi.
         brdf_tiles = set()

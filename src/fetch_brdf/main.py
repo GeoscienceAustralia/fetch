@@ -23,7 +23,7 @@ import click
 import httpx
 import structlog
 import yaml
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from httpx import URL
 from lxml import etree
 
@@ -83,7 +83,16 @@ class DateRange(BaseModel):
     )
 
     def resolve_dates(self) -> Tuple[Optional[datetime.date], Optional[datetime.date]]:
-        """Resolve relative dates to absolute dates."""
+        """Resolve relative dates to absolute dates.
+
+        >>> import datetime
+        >>> dr = DateRange(begin=-7, end=-1)
+        >>> start, end = dr.resolve_dates()
+        >>> isinstance(start, datetime.date) and isinstance(end, datetime.date)
+        True
+        >>> end > start
+        True
+        """
         today = datetime.date.today()
 
         start = None
@@ -197,7 +206,7 @@ class BrdfConfig(BaseModel):
         default="mainland+offshore",
         description="Tile set name (mainland, offshore, mainland+offshore) or path to tile list file",
     )
-    output_path: Path = Field(
+    output_path: Optional[Path] = Field(
         default=None, description="Base output directory for this product"
     )
     clean_up: bool = Field(
@@ -209,7 +218,8 @@ class BrdfConfig(BaseModel):
         default_factory=dict, description="Product-specific configurations"
     )
 
-    @validator("products")
+    @field_validator("products")
+    @classmethod
     def validate_products(cls, v):
         for product_name in v.keys():
             if product_name not in _KNOWN_PRODUCTS:
@@ -218,7 +228,8 @@ class BrdfConfig(BaseModel):
                 )
         return v
 
-    @validator("tiles")
+    @field_validator("tiles")
+    @classmethod
     def validate_tiles(cls, v):
         if isinstance(v, str):
             # Validate tile set names
@@ -260,7 +271,7 @@ def generate_example_config() -> str:
     )
 
     # Convert to dict and then to YAML for better formatting
-    config_dict = config.dict()
+    config_dict = config.model_dump()
     yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
     header = """# BRDF Downloader Configuration
 #
@@ -282,7 +293,16 @@ def generate_example_config() -> str:
 
 
 def resolve_tiles(tiles_config: Union[str, Path]) -> Set[str]:
-    """Resolve tiles configuration to a set of tile names."""
+    """Resolve tiles configuration to a set of tile names.
+
+    >>> tiles = resolve_tiles("mainland")
+    >>> "h27v09" in tiles and "h32v13" in tiles
+    True
+    >>> len(resolve_tiles("offshore"))
+    2
+    >>> len(resolve_tiles("mainland+offshore")) > len(resolve_tiles("mainland"))
+    True
+    """
     if isinstance(tiles_config, Path):
         # Load from file
         return load_tiles_from_file(tiles_config)
@@ -646,6 +666,13 @@ def find_days_with_missing_brdf_tiles(
 
 
 def _parse_day_folder(date: str) -> datetime.date:
+    """Parse a day folder string to a date object.
+
+    >>> _parse_day_folder("2024.03.15")
+    datetime.date(2024, 3, 15)
+    >>> _parse_day_folder("2023.12.31")
+    datetime.date(2023, 12, 31)
+    """
     return dt.strptime(date, "%Y.%m.%d").date()
 
 

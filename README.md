@@ -27,9 +27,16 @@ uv run fetch-brdf --help
 Or make a dev environment:
 
 ```bash
-uv sync
 uv pip install -e .
 ```
+
+Run tests:
+
+```bash
+uv sync --extra test
+uv run pytest
+```
+(or `. .venv/bin/activate` and `pytest` directly)
 
 ## Authentication
 

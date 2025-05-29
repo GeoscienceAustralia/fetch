@@ -28,6 +28,13 @@ test = [
 [project.scripts]
 fetch-brdf = "fetch_brdf.main:cli"
 
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+python_classes = ["Test*"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+testpaths = ["tests", "src"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

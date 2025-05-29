@@ -1,3 +1,7 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0"]
+
 [project]
 dependencies = [
     "click>=8.2.1",
@@ -13,6 +17,13 @@ name = "fetch-brdf"
 readme = "README.md"
 requires-python = ">=3.11"
 version = "0.1.0"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.14.0",
+    "flask>=3.0.0"
+]
 
 [project.scripts]
 fetch-brdf = "fetch_brdf.main:cli"

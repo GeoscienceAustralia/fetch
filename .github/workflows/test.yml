@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+    push:
+        branches: [main, develop]
+    pull_request:
+        branches: [main]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: ['3.11', '3.12']
+
+        steps:
+        -   uses: actions/checkout@v4
+
+        -   name: Install uv
+            uses: astral-sh/setup-uv@v4
+            with:
+                version: latest
+
+        -   name: Set up Python ${{ matrix.python-version }}
+            run: uv python install ${{ matrix.python-version }}
+
+        -   name: Install dependencies
+            run: |
+                uv sync --extra test
+
+        -   name: Run tests
+            run: |
+                uv run pytest tests/ -v --tb=short
+            env:
+        # Mock credentials for testing
+                EARTHDATA_USERNAME: test_user
+                EARTHDATA_PASSWORD: test_password
+
+        -   name: Run linting (if available)
+            run: |
+                # Check if ruff is available and run it
+                if uv run python -c "import ruff" 2>/dev/null; then
+                  uv run ruff check src/
+                else
+                  echo "Ruff not available, skipping linting"
+                fi
+            continue-on-error: true
+
+        -   name: Test CLI help
+            run: |
+                uv run fetch-brdf --help
+                uv run fetch-brdf generate-config --help
+                uv run fetch-brdf run --help

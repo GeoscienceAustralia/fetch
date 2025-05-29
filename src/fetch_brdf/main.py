@@ -406,12 +406,11 @@ class BrdfClient:
         password: Optional[str] = None,
         min_request_period_secs: Optional[float] = 0.3,
         request_timeout_secs: Optional[float] = 180,
+        host_url: Optional[str] = "https://e4ftl01.cr.usgs.gov",
     ):
         self.max_retries = max_retries
 
-        self.service_root_url: URL = URL(
-            f"https://e4ftl01.cr.usgs.gov/{product_offset}/"
-        )
+        self.service_root_url: URL = URL(f"{host_url}/{product_offset}/")
 
         self.username = username
         self.password = password
@@ -941,7 +940,7 @@ def run_with_config(config: BrdfConfig):
 
         # Resolve tiles
         try:
-            tiles = resolve_tiles(product_config.tiles)
+            tiles = resolve_tiles(config.tiles)
             log.debug("resolved_tiles", product=product_name, tiles=sorted(tiles))
         except Exception as e:
             log.error("failed_to_resolve_tiles", product=product_name, error=str(e))
@@ -967,14 +966,14 @@ def run_with_config(config: BrdfConfig):
             download_files(
                 product=product_name,
                 required_brdf_tiles=tiles,
-                output_base_path=product_config.output_path,
+                output_base_path=config.output_path,
                 username=username,
                 password=password,
                 max_retries=config.download.max_retries,
                 max_queue_size=config.download.max_queue_size,
                 max_workers=config.download.max_workers,
                 max_downloads=product_config.max_downloads,
-                clean_up=product_config.clean_up,
+                clean_up=config.clean_up,
                 no_older_than=product_start,
                 no_newer_than=product_end,
                 request_timeout_secs=config.download.request_timeout_secs,

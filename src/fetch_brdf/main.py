@@ -17,11 +17,13 @@ from concurrent.futures import (
 from datetime import datetime as dt
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Set, Tuple
+from typing import Iterable, Iterator, Optional, Set, Tuple, Union, Dict
 
+import click
 import httpx
 import structlog
-
+import yaml
+from pydantic import BaseModel, Field, validator
 from httpx import URL
 from lxml import etree
 
@@ -67,6 +69,284 @@ assert (32, 13) in TILE_SETS["mainland"]
 assert (32, 14) not in TILE_SETS["mainland"]
 
 
+# Configuration Models
+class DateRange(BaseModel):
+    """Date range configuration with support for relative dates."""
+
+    begin: Optional[Union[datetime.date, int]] = Field(
+        default=None,
+        description="Start date (YYYY-MM-DD) or relative days (negative number)",
+    )
+    end: Optional[Union[datetime.date, int]] = Field(
+        default=None,
+        description="End date (YYYY-MM-DD) or relative days (negative number)",
+    )
+
+    def resolve_dates(self) -> Tuple[Optional[datetime.date], Optional[datetime.date]]:
+        """Resolve relative dates to absolute dates."""
+        today = datetime.date.today()
+
+        start = None
+        if isinstance(self.begin, int):
+            start = today + timedelta(days=self.begin)
+        elif isinstance(self.begin, datetime.date):
+            start = self.begin
+
+        end = None
+        if isinstance(self.end, int):
+            end = today + timedelta(days=self.end)
+        elif isinstance(self.end, datetime.date):
+            end = self.end
+
+        return start, end
+
+
+class ProductConfig(BaseModel):
+    """Configuration for a specific product."""
+
+    enabled: bool = Field(default=True, description="Whether to download this product")
+    date_range: Optional[DateRange] = Field(
+        default=None, description="Product-specific date range (overrides global)"
+    )
+    max_downloads: Optional[int] = Field(
+        default=None, description="Maximum number of files to download"
+    )
+
+
+class DownloadConfig(BaseModel):
+    """Global download configuration."""
+
+    max_retries: int = Field(
+        default=4, description="Maximum number of retries for failed downloads"
+    )
+    max_queue_size: int = Field(
+        default=3, description="Maximum number of queued downloads"
+    )
+    max_workers: int = Field(
+        default=3, description="Maximum number of concurrent workers"
+    )
+    request_timeout_secs: float = Field(
+        default=180, description="Request timeout in seconds"
+    )
+    min_request_period_secs: float = Field(
+        default=0.3, description="Minimum time between requests"
+    )
+
+
+class AuthConfig(BaseModel):
+    """Authentication configuration."""
+
+    username: Optional[str] = Field(
+        default=None, description="usgs username (if not $EARTHDATA_USERNAME)"
+    )
+    password: Optional[str] = Field(
+        default=None, description="usgs password (if not $EARTHDATA_PASSWORD)"
+    )
+
+    def get_credentials(self) -> Tuple[str, str]:
+        """Get credentials from config or environment variables."""
+        username = self.username or os.environ.get("EARTHDATA_USERNAME")
+        password = self.password or os.environ.get("EARTHDATA_PASSWORD")
+
+        if not username or not password:
+            raise ValueError(
+                "No username/password supplied. Set in config file or use "
+                "EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables"
+            )
+
+        return username, password
+
+
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    verbose: bool = Field(default=False, description="Enable verbose logging")
+    log_file_pattern: Optional[str] = Field(
+        default="/g/data/v10/logs/fetch/{year}-{month:02d}/{day:02d}-{hour:02d}{minute:02d}{second:02d}-{product}.jsonl",
+        description="Log file pattern with date and product variables",
+    )
+
+    def get_log_path(self, product: str) -> Optional[Path]:
+        """Generate log file path for given product."""
+        if not self.log_file_pattern:
+            return None
+
+        now = datetime.datetime.now()
+        return Path(
+            self.log_file_pattern.format(
+                year=now.year,
+                month=now.month,
+                day=now.day,
+                hour=now.hour,
+                minute=now.minute,
+                second=now.second,
+                product=product,
+            )
+        )
+
+
+class BrdfConfig(BaseModel):
+    """Main BRDF downloader configuration."""
+
+    # Global settings
+    date_range: Optional[DateRange] = Field(None, description="Global date range")
+    download: DownloadConfig = Field(default_factory=DownloadConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    tiles: Union[str, Path] = Field(
+        default="mainland+offshore",
+        description="Tile set name (mainland, offshore, mainland+offshore) or path to tile list file",
+    )
+    output_path: Path = Field(
+        default=None, description="Base output directory for this product"
+    )
+    clean_up: bool = Field(
+        default=True, description="Clean up intermediate files after conversion"
+    )
+
+    # Product configurations
+    products: Dict[str, ProductConfig] = Field(
+        default_factory=dict, description="Product-specific configurations"
+    )
+
+    @validator("products")
+    def validate_products(cls, v):
+        for product_name in v.keys():
+            if product_name not in _KNOWN_PRODUCTS:
+                raise ValueError(
+                    f"Unknown product '{product_name}'. Must be one of {list(_KNOWN_PRODUCTS.keys())}"
+                )
+        return v
+
+    @validator("tiles")
+    def validate_tiles(cls, v):
+        if isinstance(v, str):
+            # Validate tile set names
+            valid_sets = {"mainland", "offshore", "mainland+offshore"}
+            if v not in valid_sets:
+                raise ValueError(f"Tile set must be one of {valid_sets} or a file path")
+        return v
+
+    def get_enabled_products(self) -> Dict[str, ProductConfig]:
+        """Get only enabled products."""
+        return {
+            name: config for name, config in self.products.items() if config.enabled
+        }
+
+
+def generate_example_config() -> str:
+    """Generate an example configuration file."""
+    config = BrdfConfig(
+        date_range=DateRange(
+            begin=(datetime.datetime.now() - datetime.timedelta(days=-30)).date(),
+            end=-7,  # 7 days ago
+        ),
+        output_path=Path("/g/data/v10/eoancillarydata-2"),
+        download=DownloadConfig(),
+        logging=LoggingConfig(
+            verbose=False,
+        ),
+        products={
+            "modis": ProductConfig(
+                enabled=True,
+            ),
+            "viirs_m": ProductConfig(
+                enabled=False,
+            ),
+            "viirs_i": ProductConfig(
+                enabled=False,
+            ),
+        },
+    )
+
+    # Convert to dict and then to YAML for better formatting
+    config_dict = config.dict()
+    yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
+    header = """# BRDF Downloader Configuration
+#
+# This configuration file controls the download of BRDF products from USGS.
+#
+# Date format: YYYY-MM-DD or relative days (negative numbers for past dates)
+# Examples:
+#   begin: "2024-01-01"  # Absolute date
+#   begin: -30           # 30 days ago
+#   end_date: -1              # Yesterday
+#
+# Tile sets: "mainland", "offshore", "mainland+offshore"
+#
+# Products: modis, viirs_m, viirs_i
+#
+"""
+
+    return header + yaml_content
+
+
+def resolve_tiles(tiles_config: Union[str, Path]) -> Set[str]:
+    """Resolve tiles configuration to a set of tile names."""
+    if isinstance(tiles_config, Path):
+        # Load from file
+        return load_tiles_from_file(tiles_config)
+
+    # Or use tile set names (concatenated by a plus)
+    tile_sets = tiles_config.split("+")
+    tile_coords = set()
+    for tile_set in tile_sets:
+        tile_set = tile_set.strip()
+        if tile_set not in TILE_SETS:
+            raise ValueError(f"Unknown tile set: {tile_set}")
+        tile_coords.update(TILE_SETS[tile_set])
+
+    return {f"h{h:02d}v{v:02d}" for h, v in tile_coords}
+
+
+def setup_logging(logging_config: LoggingConfig, product: str = None):
+    """Setup logging configuration."""
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.dev.set_exc_info,
+        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
+    ]
+
+    if sys.stderr.isatty():
+        # Pretty printing when run in a terminal session.
+        processors = shared_processors + [structlog.dev.ConsoleRenderer()]
+    else:
+        # Log JSON when run otherwise
+        processors = shared_processors + [
+            structlog.processors.dict_tracebacks,
+            structlog.processors.JSONRenderer(),
+        ]
+
+    import logging
+
+    # Setup file logging if configured
+    if logging_config.log_file_pattern:
+        log_path = logging_config.get_log_path("brdf")
+        if log_path:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_path)
+            file_handler.setLevel(
+                logging.DEBUG if logging_config.verbose else logging.INFO
+            )
+            logging.getLogger().addHandler(file_handler)
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(
+            logging.NOTSET if logging_config.verbose else logging.INFO
+        ),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=False,
+    )
+
+
+# Keep all the existing functions (BrdfClient, download_files, etc.) unchanged
+# ... [Include all the previous functions here - they remain the same] ...
+
+
 def get_working_dir(path: Path, create=True) -> Path:
     """
     Get a working directory we could use for processing in the given path.
@@ -74,18 +354,14 @@ def get_working_dir(path: Path, create=True) -> Path:
     It should always be on the same drive, so that we can rename the file into place.
 
     >>> get_working_dir(Path('/g/data/v10/eoancillarydata-2/BRDF/MCD43A1.061/2024.03.15/A2024075'), create=False)
-    PosixPath('/g/data/v10/eoancillarydata-2/.tmp-work/BRDF/MCD43A1.061/2024.03.15/A2024075')
+    PosixPath('/g/data/v10/eoancillarydata-2/BRDF/.tmp-work/MCD43A1.061/2024.03.15/A2024075')
     """
-    # Check if the path is a Path object
-    if not isinstance(path, Path):
-        raise TypeError(f"Expected a Path object, but got {type(path)}")
-
-    expected_prefix = Path("/g/data/v10")
-    if not path.is_absolute() or not str(path).startswith(str(expected_prefix)):
+    expected_folders = [p for p in path.parents if p.name == "BRDF"]
+    if not expected_folders:
         raise ValueError(
-            f"Expected path to start with '{expected_prefix}', but got '{path}'"
+            f"Expected path to be inside a BRDF directory, but got '{path}'"
         )
-
+    expected_prefix = expected_folders[0]
     relative_path = path.relative_to(expected_prefix)
 
     temp_prefix = expected_prefix / ".tmp-work"
@@ -101,6 +377,9 @@ def parse_acq_date(acquisition_date: str) -> dt.date:
     Parse the acquisition date from the filename into a date object.
 
     Acquisition is year and day of year.
+
+    >>> parse_acq_date('2024075')
+    datetime.date(2024, 3, 15)
     """
     return dt.strptime(acquisition_date, "%Y%j").date()
 
@@ -371,15 +650,12 @@ def _parse_day_folder(date: str) -> datetime.date:
     return dt.strptime(date, "%Y.%m.%d").date()
 
 
-_unset = object()
-
-
 def download_files(
     product: str,
     required_brdf_tiles: Set[str],
     output_base_path: Path,
-    username: str = os.environ.get("EARTHDATA_USERNAME", _unset),
-    password: str = os.environ.get("EARTHDATA_PASSWORD", _unset),
+    username: str,
+    password: str,
     max_retries: int = 4,
     max_queue_size: int = 3,
     max_workers: int = 3,
@@ -387,20 +663,14 @@ def download_files(
     clean_up: bool = True,
     no_older_than: datetime.date = None,
     no_newer_than: datetime.date = None,
+    request_timeout_secs: float = 180,
+    min_request_period_secs: float = 0.3,
 ):
     """
     Download and convert MCD43A1 files from USGS
 
     The base path will have YYYY.MM.DD subdirectories, matching the download location.
-    :param no_older_than:
-    :param no_newer_than:
     """
-    if username is _unset or password is _unset:
-        raise ValueError(
-            "No username/password supplied "
-            "(nor EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables)"
-        )
-
     log = LOG
     count = 0
     if product not in _KNOWN_PRODUCTS:
@@ -416,6 +686,8 @@ def download_files(
         max_retries=max_retries,
         username=username,
         password=password,
+        request_timeout_secs=request_timeout_secs,
+        min_request_period_secs=min_request_period_secs,
     ) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
@@ -577,7 +849,7 @@ def download_and_convert(
         output_xml_path = output_folder / file_xml_path.name
         file_path.rename(output_hdf_path)
         file_xml_path.rename(output_xml_path)
-        final_path = file_path
+        final_path = output_hdf_path
 
     return final_path
 
@@ -646,152 +918,148 @@ def load_tiles_from_file(tiles_path: Path) -> Set[str]:
     return tiles
 
 
-def main(
-    verbose: bool,
-    product: str,
-    tiles_path: str = None,
-    no_offshore_tiles: bool = False,
-    no_mainland_tiles: bool = False,
-    output_base=Path("test_out"),
-    start_date: datetime.date = None,
-    end_date: datetime.date = None,
-    min_age_days=None,
-):
-    if product not in _KNOWN_PRODUCTS.keys():
-        raise ValueError(
-            f"Unknown product {product}. Known products are {list(_KNOWN_PRODUCTS.keys())}"
-        )
-
-    if tiles_path:
-        brdf_tiles = load_tiles_from_file(tiles_path)
-    else:
-        # Otherwise populate our standard aoi.
-        brdf_tiles = set()
-        if not no_offshore_tiles:
-            brdf_tiles.update(TILE_SETS["offshore"])
-        if not no_mainland_tiles:
-            brdf_tiles.update(TILE_SETS["mainland"])
-        brdf_tiles = {f"h{h:02d}v{v:02d}" for h, v in brdf_tiles}
-
-    no_newer_than = None
-    if end_date:
-        no_newer_than = end_date
-    elif min_age_days:
-        no_newer_than = (datetime.datetime.now() - timedelta(days=min_age_days)).date()
-
-    no_older_than = start_date
-
-    import logging
-
-    shared_processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.dev.set_exc_info,
-        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
-    ]
-
-    if sys.stderr.isatty():
-        # Pretty printing when run in a terminal session.
-        # Automatically prints pretty tracebacks when "rich" is installed
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(),
-        ]
-    else:
-        # Log JSON when run otherwise
-        processors = shared_processors + [
-            structlog.processors.dict_tracebacks,
-            structlog.processors.JSONRenderer(),
-        ]
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.NOTSET if verbose else logging.INFO
-        ),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=False,
-    )
+def run_with_config(config: BrdfConfig):
+    """Run the downloader with the given configuration."""
+    setup_logging(config.logging)
 
     log = structlog.get_logger()
+    username, password = config.auth.get_credentials()
+
+    enabled_products = config.get_enabled_products()
+    if not enabled_products:
+        log.warning("No enabled products found in configuration")
+        return
+
     log.info(
-        "starting_brdf",
-        product=product,
-        output_base=output_base,
-        start_date=no_older_than,
-        end_date=no_newer_than,
-    )
-    log.debug("selected_tiles", tiles=sorted(brdf_tiles))
-
-    download_files(
-        product=product,
-        required_brdf_tiles=brdf_tiles,
-        output_base_path=output_base,
-        no_older_than=no_older_than,
-        no_newer_than=no_newer_than,
+        "starting_brdf_download",
+        enabled_products=list(enabled_products.keys()),
+        global_date_range=config.date_range,
     )
 
+    for product_name, product_config in enabled_products.items():
+        log.info("processing_product", product=product_name)
 
+        # Resolve tiles
+        try:
+            tiles = resolve_tiles(product_config.tiles)
+            log.debug("resolved_tiles", product=product_name, tiles=sorted(tiles))
+        except Exception as e:
+            log.error("failed_to_resolve_tiles", product=product_name, error=str(e))
+            continue
+
+        # Resolve date range
+        global_start, global_end = None, None
+        if config.date_range:
+            global_start, global_end = config.date_range.resolve_dates()
+
+        product_start, product_end = global_start, global_end
+        if product_config.date_range:
+            product_start, product_end = product_config.date_range.resolve_dates()
+
+        log.info(
+            "date_range_resolved",
+            product=product_name,
+            start_date=product_start,
+            end_date=product_end,
+        )
+
+        try:
+            download_files(
+                product=product_name,
+                required_brdf_tiles=tiles,
+                output_base_path=product_config.output_path,
+                username=username,
+                password=password,
+                max_retries=config.download.max_retries,
+                max_queue_size=config.download.max_queue_size,
+                max_workers=config.download.max_workers,
+                max_downloads=product_config.max_downloads,
+                clean_up=product_config.clean_up,
+                no_older_than=product_start,
+                no_newer_than=product_end,
+                request_timeout_secs=config.download.request_timeout_secs,
+                min_request_period_secs=config.download.min_request_period_secs,
+            )
+        except Exception as e:
+            log.exception("product_download_failed", product=product_name, error=str(e))
+            continue
+
+    log.info("brdf_download_complete")
+
+
+@click.group()
 def cli():
-    import argparse
+    """BRDF Downloader - Download and convert BRDF files from USGS."""
+    pass
 
-    parser = argparse.ArgumentParser(
-        description="Download and convert brdf files from USGS"
-    )
-    parser.add_argument(
-        "product",
-        type=str,
-        choices=list(_KNOWN_PRODUCTS.keys()),
-        help="BRDF product type to download",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-    parser.add_argument(
-        "--no-offshore-tiles",
-        action="store_true",
-        help="Skip downloading the offshore tiles",
-    )
-    parser.add_argument(
-        "--no-mainland-tiles",
-        action="store_true",
-        help="Skip downloading the mainland tiles",
-    )
-    parser.add_argument(
-        "--tiles-path",
-        type=Path,
-        help="Path to an alternative tile list file (one per line)",
-        default=None,
-    )
-    parser.add_argument(
-        "--output-base",
-        type=Path,
-        help="Output folder",
-        default="/g/data/v10/eoancillarydata-2",
-    )
-    parser.add_argument(
-        "--min-age-days",
-        type=int,
-        default=None,
-        help="Minimum age of files to download",
-    )
-    parser.add_argument(
-        "--start-date",
-        type=lambda x: datetime.datetime.strptime(x, "%Y-%m-%d").date(),
-        default=None,
-        help="Oldest date to download",
-    )
-    parser.add_argument(
-        "--end-date",
-        type=lambda x: datetime.datetime.strptime(x, "%Y-%m-%d").date(),
-        default=None,
-        help="Newest date to download",
-    )
-    args = parser.parse_args()
-    main(**vars(args))
+
+@cli.command()
+@click.option(
+    "--config-path",
+    "-c",
+    type=click.Path(exists=True, path_type=Path),
+    envvar="BRDF_CONFIG_PATH",
+    help="Path to configuration file (can also set BRDF_CONFIG_PATH environment variable)",
+)
+def run(config_path: Optional[Path]):
+    """Run the BRDF downloader with the specified configuration."""
+    if not config_path:
+        # Try default locations
+        default_paths = [
+            Path.cwd() / "brdf-config.yaml",
+            Path.cwd() / "brdf-config.yml",
+            Path.home() / ".config" / "brdf-downloader" / "config.yaml",
+            Path("/etc/brdf-downloader/config.yaml"),
+        ]
+
+        for path in default_paths:
+            if path.exists():
+                config_path = path
+                break
+
+        if not config_path:
+            click.echo(
+                "No configuration file found. Use --config-path or set BRDF_CONFIG_PATH",
+                err=True,
+            )
+            click.echo("Default locations searched:", err=True)
+            for path in default_paths:
+                click.echo(f"  {path}", err=True)
+            click.echo(
+                "\nGenerate an example config with: brdf-downloader generate-config",
+                err=True,
+            )
+            raise click.Abort()
+
+    try:
+        with open(config_path) as f:
+            config_data = yaml.safe_load(f)
+
+        config = BrdfConfig(**config_data)
+        run_with_config(config)
+
+    except Exception as e:
+        click.echo(f"Error loading configuration: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file path (default: print to stdout)",
+)
+def generate_config(output: Optional[Path]):
+    """Generate an example configuration file."""
+    config_content = generate_example_config()
+
+    if output:
+        with open(output, "w") as f:
+            f.write(config_content)
+        click.echo(f"Example configuration written to {output}")
+    else:
+        click.echo(config_content)
 
 
 if __name__ == "__main__":

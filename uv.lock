@@ -65,7 +65,7 @@ wheels = [
 ]
 
 [[package]]
-name = "fetch-brdf"
+name = "fetch2"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

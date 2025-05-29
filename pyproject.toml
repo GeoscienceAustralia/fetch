@@ -13,20 +13,16 @@ dependencies = [
     "urllib3>=2.4.0"
 ]
 description = "Find and download missing BRDF"
-name = "fetch-brdf"
+name = "fetch2"
 readme = "README.md"
 requires-python = ">=3.11"
 version = "0.1.0"
 
 [project.optional-dependencies]
-test = [
-    "pytest>=8.0.0",
-    "pytest-mock>=3.14.0",
-    "flask>=3.0.0"
-]
+test = ["pytest>=8.0.0", "pytest-mock>=3.14.0", "flask>=3.0.0"]
 
 [project.scripts]
-fetch-brdf = "fetch_brdf.main:cli"
+fetch2-brdf = "fetch2.brdf:cli"
 
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"

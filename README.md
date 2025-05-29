@@ -1,7 +1,9 @@
-# BRDF Data Downloader
+# fetch2
 
-A script for downloading and converting BRDF (Bidirectional Reflectance Distribution Function) satellite data
-from NASA's USGS Earth Observation servers.
+This is a rewrite of the brdf downloader that allow gaps to be filled in a more efficient way.
+
+It takes a date range (defaulting to all available) and tiles (defaulting to DEA's mainland+offshore areas), and will
+find and fill in any gaps in the output folder.
 
 It has default settings for GA's BRDF downloading at NCI, with support for flexible configuration files
 to manage multiple products and collections.
@@ -21,10 +23,10 @@ to manage multiple products and collections.
 ## Quick Run
 
 ```bash
-uv run fetch-brdf --help
+uv run fetch2-brdf --help
 ```
 
-Or make a dev environment:
+Or pip install it:
 
 ```bash
 uv pip install -e .
@@ -36,6 +38,7 @@ Run tests:
 uv sync --extra test
 uv run pytest
 ```
+
 (or `. .venv/bin/activate` and `pytest` directly)
 
 ## Authentication
@@ -51,60 +54,26 @@ Alternatively, they can be set in the config file (below), but be aware of its a
 
 ## Usage
 
-### Configuration-Based Usage (Recommended)
+### Basic Configuration
 
 Generate an example configuration file:
 
 ```bash
-# Print example config to screen
-uv run fetch-brdf generate-config
+# Print example config
+fetch2-brdf generate-config
 
-# Save example config to file
-uv run fetch-brdf generate-config -o my-config.yaml
+# Or write it to a file
+fetch2-brdf generate-config -o my-config.yaml
 ```
 
-Run with configuration file:
+Run with a configuration file:
 
 ```bash
-# Specify config file
-uv run fetch-brdf run --config-path my-config.yaml
+fetch2-brdf run --config-path my-config.yaml
 
 # Or set environment variable
 export BRDF_CONFIG_PATH=/path/to/my-config.yaml
-uv run fetch-brdf run
-```
-
-The configuration file supports:
-
-- **Multiple products** in a single run
-- **Per-product settings** (different output paths, date ranges, tiles)
-- **Relative dates** (e.g., `-30` for 30 days ago)
-- **Flexible logging** with file output patterns
-- **Tile sets** by name or custom file paths
-
-### Legacy Command Line Usage
-
-For backward compatibility, the original command-line interface is still supported:
-
-```bash
-# Basic usage - downloads MODIS for Australian tiles
-uv run fetch-brdf modis
-
-# Download specific product with date range
-uv run fetch-brdf viirs_m --start-date 2024-01-01 --end-date 2024-01-31
-
-# Custom output directory and verbose logging
-uv run fetch-brdf modis --verbose --start-date=$(date -d "yesterday" +%F) --output-base /testing/eoancillarydata-2
-```
-
-### Configuration File Examples
-
-**Basic Configuration:**
-
-Run the generate-config command and pipe it to a file.
-
-```bash
-uv run fetch-brdf generate-config > config.yaml
+fetch2-brdf run
 ```
 
 An example config:
@@ -116,28 +85,21 @@ logging:
     log_file_pattern: "/g/data/v10/logs/fetch/{year}-{month:02d}/{day:02d}-{hour:02d}{minute:02d}{second:02d}-{product}.jsonl"
 
 date_range:
-  # Can be either a specific date or relative date
-  begin: 2025-01-01
-  end: -7 # 7 days ago
+    # Can be either a specific date or relative date
+    begin: 2025-01-01
+    end: -7 # 7 days ago
 
 tiles: mainland+offshore
 
 # Products to download
 products:
-  modis:
-    enabled: true
-  viirs_m:
-    enabled: true
-    date_range:
-      begin: 2024-01-01
+    modis:
+        enabled: true
+    viirs_m:
+        enabled: true
+        date_range:
+            begin: 2024-01-01
 ```
-
-## Command Line Options
-
-### Main Commands
-
-- `fetch-brdf generate-config`: Generate a configuration file
-- `fetch-brdf run`: Run downloader with configuration file
 
 ## Tile Configuration
 
@@ -179,21 +141,16 @@ Example:
 
 ## Logging
 
-### Console Logging
-
-- **Interactive terminal**: Pretty-printed colored output
-- **Redirected/scripted**: Structured JSON logging
-
 ### File Logging
 
 Configure in your config file:
 
 ```yaml
 logging:
-  log_file_pattern: "/var/log/brdf/{year}-{month:02d}/{day:02d}-{hour:02d}{minute:02d}{second:02d}-{product}.jsonl"
+    log_file_pattern: "/var/log/brdf/{year}-{month:02d}/{day:02d}-{hour:02d}{minute:02d}{second:02d}-{product}.jsonl"
 ```
 
-Supports variables:
+Supported variables:
 
 - `{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`
 - `{product}` - The product being downloaded

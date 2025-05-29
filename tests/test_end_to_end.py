@@ -10,7 +10,7 @@ import pytest
 import yaml
 from flask import Flask, abort
 
-from fetch_brdf.main import BrdfConfig, run_with_config
+from fetch2.brdf import BrdfConfig, run_with_config
 
 
 class USGSTestServer:
@@ -167,7 +167,7 @@ def patch_brdf_client_url(test_server_url: str):
     """Patch the BrdfClient to use our test server instead of the real USGS server."""
 
     # Store the original __init__ method
-    from fetch_brdf.main import BrdfClient
+    from fetch2.brdf import BrdfClient
 
     original_init = BrdfClient.__init__
 
@@ -211,11 +211,11 @@ def test_end_to_end_brdf_download(test_config, test_usgs_server, temp_dir, monke
 
     # Patch BrdfClient to use our test server
     with patch(
-        "fetch_brdf.main.BrdfClient.__init__",
+        "fetch2.brdf.BrdfClient.__init__",
         patch_brdf_client_url(test_usgs_server.get_base_url()),
     ):
         # Mock subprocess for swfo-convert
-        with patch("fetch_brdf.main.subprocess.run", side_effect=mock_swfo_convert):
+        with patch("fetch2.brdf.subprocess.run", side_effect=mock_swfo_convert):
             # Mock environment variables for auth
             monkeypatch.setenv("EARTHDATA_USERNAME", "test_user")
             monkeypatch.setenv("EARTHDATA_PASSWORD", "test_pass")
@@ -263,11 +263,11 @@ def test_config_based_execution_with_cli(temp_dir):
         yaml.dump(config_data, f)
 
     # Mock the entire workflow since we're testing CLI integration
-    with patch("fetch_brdf.main.run_with_config") as mock_run:
+    with patch("fetch2.brdf.run_with_config") as mock_run:
         with patch(
-            "sys.argv", ["fetch-brdf", "run", "--config-path", str(config_file)]
+            "sys.argv", ["fetch2-brdf", "run", "--config-path", str(config_file)]
         ):
-            from fetch_brdf.main import cli
+            from fetch2.brdf import cli
 
             # This should not raise an exception
             try:
@@ -300,7 +300,7 @@ def test_environment_variable_auth(temp_dir, monkeypatch):
 
 def test_tile_resolution():
     """Test tile resolution for different configurations."""
-    from fetch_brdf.main import resolve_tiles
+    from fetch2.brdf import resolve_tiles
 
     # Test built-in tile sets
     mainland_tiles = resolve_tiles("mainland")

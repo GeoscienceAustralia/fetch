@@ -2,6 +2,7 @@ import datetime
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -198,7 +199,9 @@ class BrdfConfig(BaseModel):
     """Main BRDF downloader configuration."""
 
     # Global settings
-    date_range: Optional[DateRange] = Field(None, description="Global date range")
+    date_range: Optional[DateRange] = Field(
+        default=None, description="Global date range"
+    )
     download: DownloadConfig = Field(default_factory=DownloadConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -271,7 +274,7 @@ def generate_example_config() -> str:
     )
 
     # Convert to dict and then to YAML for better formatting
-    config_dict = config.model_dump()
+    config_dict = config.model_dump(mode="json", exclude_none=True)
     yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
     header = """# BRDF Downloader Configuration
 #
@@ -319,6 +322,18 @@ def resolve_tiles(tiles_config: Union[str, Path]) -> Set[str]:
     return {f"h{h:02d}v{v:02d}" for h, v in tile_coords}
 
 
+def clean_log_values(logger, name, event_dict):
+    """Custom processor to clean up log values for better readability."""
+    for key, value in event_dict.items():
+        if isinstance(value, datetime.date):
+            event_dict[key] = value.isoformat()
+        elif isinstance(value, URL):
+            event_dict[key] = str(value)
+        elif isinstance(value, Path):
+            event_dict[key] = str(value)
+    return event_dict
+
+
 def setup_logging(logging_config: LoggingConfig, product: str = None):
     """Setup logging configuration."""
     shared_processors = [
@@ -327,9 +342,21 @@ def setup_logging(logging_config: LoggingConfig, product: str = None):
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
+        clean_log_values,
     ]
 
-    if sys.stderr.isatty():
+    # Setup file logging if configured
+
+    log_path = (
+        logging_config.get_log_path("brdf") if logging_config.log_file_pattern else None
+    )
+    if log_path:
+        log_obj = log_path.open("a")
+        sys.stderr.write(f"Logging to {log_path}\n")
+    else:
+        log_obj = sys.stderr
+
+    if log_obj.isatty():
         # Pretty printing when run in a terminal session.
         processors = shared_processors + [structlog.dev.ConsoleRenderer()]
     else:
@@ -341,24 +368,13 @@ def setup_logging(logging_config: LoggingConfig, product: str = None):
 
     import logging
 
-    # Setup file logging if configured
-    if logging_config.log_file_pattern:
-        log_path = logging_config.get_log_path("brdf")
-        if log_path:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(log_path)
-            file_handler.setLevel(
-                logging.DEBUG if logging_config.verbose else logging.INFO
-            )
-            logging.getLogger().addHandler(file_handler)
-
     structlog.configure(
         processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(
             logging.NOTSET if logging_config.verbose else logging.INFO
         ),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.PrintLoggerFactory(file=log_obj),
         cache_logger_on_first_use=False,
     )
 
@@ -798,7 +814,7 @@ def download_files(
                         task.add_done_callback(done_one)
                         tasks.append(task)
                     count += 1
-                    if count >= max_downloads:
+                    if max_downloads and count >= max_downloads:
                         break
 
                 # Trim tasks if needed
@@ -810,7 +826,7 @@ def download_files(
                         trimmed_tasks.append(task)
                 tasks = trimmed_tasks
 
-                if count >= max_downloads:
+                if max_downloads and count >= max_downloads:
                     break
 
             log.info("awaiting_final_tasks")
@@ -944,6 +960,11 @@ def load_tiles_from_file(tiles_path: Path) -> Set[str]:
     return tiles
 
 
+def check_swfo_convert_available() -> bool:
+    """Check if swfo-convert command is available on the PATH."""
+    return shutil.which("swfo-convert") is not None
+
+
 def run_with_config(config: BrdfConfig):
     """Run the downloader with the given configuration."""
     setup_logging(config.logging)
@@ -955,6 +976,18 @@ def run_with_config(config: BrdfConfig):
     if not enabled_products:
         log.warning("No enabled products found in configuration")
         return
+
+    # Check if any enabled products will need swfo-convert (modis products need conversion)
+    needs_conversion = any(product in enabled_products for product in ["modis"])
+    if needs_conversion and not check_swfo_convert_available():
+        log.error(
+            "swfo-convert command not found on PATH but is required for MODIS products"
+        )
+        raise RuntimeError(
+            "swfo-convert command not found on PATH. "
+            "This is required for converting MODIS HDF files to H5 format. "
+            "Please install swfo-convert or disable MODIS products in your configuration."
+        )
 
     log.info(
         "starting_brdf_download",
@@ -1083,7 +1116,6 @@ def generate_config(output: Optional[Path]):
     if output:
         with open(output, "w") as f:
             f.write(config_content)
-        click.echo(f"Example configuration written to {output}")
     else:
         click.echo(config_content)
 

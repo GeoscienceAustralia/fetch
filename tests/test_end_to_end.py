@@ -163,6 +163,27 @@ def test_config(temp_dir):
     return BrdfConfig(**config_data)
 
 
+@pytest.fixture
+def mocked_environment(monkeypatch):
+    """Fixture that sets up environment variables for auth."""
+    monkeypatch.setenv("EARTHDATA_USERNAME", "test_user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "test_pass")
+
+
+@pytest.fixture
+def patched_brdf_system(test_usgs_server, mocked_environment):
+    """Combined fixture that patches both BrdfClient and subprocess for full system tests."""
+    with (
+        patch(
+            "fetch2.brdf.BrdfClient.__init__",
+            patch_brdf_client_url(test_usgs_server.get_base_url()),
+        ),
+        patch("fetch2.brdf.subprocess.run", side_effect=mock_swfo_convert),
+        patch("fetch2.brdf.check_swfo_convert_available", return_value=True),
+    ):
+        yield
+
+
 def patch_brdf_client_url(test_server_url: str):
     """Patch the BrdfClient to use our test server instead of the real USGS server."""
 
@@ -206,47 +227,36 @@ def mock_swfo_convert(cmd, **kwargs):
     return result
 
 
-def test_end_to_end_brdf_download(test_config, test_usgs_server, temp_dir, monkeypatch):
+def test_end_to_end_brdf_download(test_config, patched_brdf_system, temp_dir):
     """Do a test download."""
 
-    # Patch BrdfClient to use our test server
-    with patch(
-        "fetch2.brdf.BrdfClient.__init__",
-        patch_brdf_client_url(test_usgs_server.get_base_url()),
-    ):
-        # Mock subprocess for swfo-convert
-        with patch("fetch2.brdf.subprocess.run", side_effect=mock_swfo_convert):
-            # Mock environment variables for auth
-            monkeypatch.setenv("EARTHDATA_USERNAME", "test_user")
-            monkeypatch.setenv("EARTHDATA_PASSWORD", "test_pass")
+    # Run the downloader
+    run_with_config(test_config)
 
-            # Run the downloader
-            run_with_config(test_config)
+    # Verify output structure was created
+    brdf_dir = temp_dir / "BRDF" / "MCD43A1.061"
+    assert brdf_dir.exists(), f"BRDF directory not created: {brdf_dir}"
 
-            # Verify output structure was created
-            brdf_dir = temp_dir / "BRDF" / "MCD43A1.061"
-            assert brdf_dir.exists(), f"BRDF directory not created: {brdf_dir}"
+    # Check for date directories (YYYY.MM.DD format)
+    date_dirs = list(brdf_dir.glob("????.*.*"))
+    assert len(date_dirs) > 0, (
+        f"No date directories created in {brdf_dir}. Contents: {list(brdf_dir.iterdir())}"
+    )
 
-            # Check for date directories (YYYY.MM.DD format)
-            date_dirs = list(brdf_dir.glob("????.*.*"))
-            assert len(date_dirs) > 0, (
-                f"No date directories created in {brdf_dir}. Contents: {list(brdf_dir.iterdir())}"
+    # Check for H5 files in date directories
+    h5_files = list(brdf_dir.glob("*/*.h5"))
+    assert len(h5_files) > 0, f"No H5 files found in {brdf_dir}"
+
+    # Verify file content
+    for h5_file in h5_files:
+        with open(h5_file, "rb") as f:
+            content = f.read()
+            assert content == b"MOCK_H5_CONVERTED_CONTENT", (
+                f"Unexpected content in {h5_file}"
             )
 
-            # Check for H5 files in date directories
-            h5_files = list(brdf_dir.glob("*/*.h5"))
-            assert len(h5_files) > 0, f"No H5 files found in {brdf_dir}"
-
-            # Verify file content
-            for h5_file in h5_files:
-                with open(h5_file, "rb") as f:
-                    content = f.read()
-                    assert content == b"MOCK_H5_CONVERTED_CONTENT", (
-                        f"Unexpected content in {h5_file}"
-                    )
-
-            # Verify we have the expected number of files (max_downloads=2)
-            assert len(h5_files) == 2, f"Expected 2 H5 files, got {len(h5_files)}"
+    # Verify we have the expected number of files (max_downloads=2)
+    assert len(h5_files) == 2, f"Expected 2 H5 files, got {len(h5_files)}"
 
 
 def test_config_based_execution_with_cli(temp_dir):
@@ -313,6 +323,102 @@ def test_tile_resolution():
 
     combined_tiles = resolve_tiles("mainland+offshore")
     assert len(combined_tiles) == len(mainland_tiles) + len(offshore_tiles)
+
+
+def test_disabled_product_not_downloaded(test_config, mocked_environment, temp_dir):
+    """Test that disabled products are not downloaded."""
+    # Disable the product
+    test_config.products["modis"].enabled = False
+
+    run_with_config(test_config)
+
+    # Verify no BRDF directory was created since product was disabled
+    brdf_dir = temp_dir / "BRDF"
+    assert not brdf_dir.exists(), (
+        f"BRDF directory should not exist when product disabled: {brdf_dir}"
+    )
+
+
+def test_max_downloads_limit(test_config, patched_brdf_system, temp_dir):
+    """Test that max_downloads limit is respected."""
+    # Set very low limit
+    test_config.products["modis"].max_downloads = 1
+
+    run_with_config(test_config)
+
+    # Verify only 1 file was downloaded despite more being available
+    brdf_dir = temp_dir / "BRDF" / "MCD43A1.061"
+    h5_files = list(brdf_dir.glob("*/*.h5"))
+    assert len(h5_files) == 1, (
+        f"Expected exactly 1 H5 file due to max_downloads=1, got {len(h5_files)}"
+    )
+
+
+def test_no_enabled_products(temp_dir, mocked_environment):
+    """Test behavior when no products are enabled."""
+    config_data = {
+        "output_path": str(temp_dir),
+        "logging": {"verbose": True, "log_file_pattern": None},  # Disable file logging
+        "products": {
+            "modis": {"enabled": False},
+            "viirs_m": {"enabled": False},
+        },
+    }
+    test_config = BrdfConfig(**config_data)
+
+    # Should complete without error but do nothing
+    run_with_config(test_config)
+
+    # Verify no output directory was created
+    assert not (temp_dir / "BRDF").exists(), (
+        "No BRDF directory should exist when no products enabled"
+    )
+
+
+def test_invalid_product_config():
+    """Test that invalid product names are rejected during config validation."""
+    with pytest.raises(ValueError, match="Unknown product 'invalid_product'"):
+        BrdfConfig(
+            output_path="/tmp",
+            products={"invalid_product": {"enabled": True}},
+        )
+
+
+def test_invalid_tile_set_config():
+    """Test that invalid tile set names are rejected during config validation."""
+    with pytest.raises(ValueError, match="Tile set must be one of"):
+        BrdfConfig(
+            output_path="/tmp",
+            tiles="invalid_tiles",
+            products={"modis": {"enabled": True}},
+        )
+
+
+def test_missing_auth_credentials(monkeypatch):
+    """Test that missing authentication credentials raise appropriate error."""
+    # Clear any existing environment variables
+    monkeypatch.delenv("EARTHDATA_USERNAME", raising=False)
+    monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
+
+    config = BrdfConfig(
+        output_path="/tmp",
+        products={"modis": {"enabled": True}},
+    )
+
+    with pytest.raises(ValueError, match="No username/password supplied"):
+        config.auth.get_credentials()
+
+
+def test_missing_output_path():
+    """Test that missing output_path is handled appropriately."""
+    config_data = {
+        "products": {"modis": {"enabled": True}},
+        # output_path intentionally missing
+    }
+    test_config = BrdfConfig(**config_data)
+
+    # Should accept None output_path in config validation
+    assert test_config.output_path is None
 
 
 if __name__ == "__main__":

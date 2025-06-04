@@ -5,28 +5,40 @@ This is a rewrite of the brdf downloader that allow gaps to be filled in a more 
 It takes a date range (defaulting to all available) and tiles (defaulting to DEA's mainland+offshore areas), and will
 find and fill in any gaps in the output folder.
 
-It has default settings for GA's BRDF downloading at NCI, with support for flexible configuration files
+It has default settings for GA's BRDF downloading at NCI, with support for configuration files
 to manage multiple products and collections.
 
 ## Supported Products
 
 - **MODIS**: MCD43A1.061 - Terra/Aqua combined BRDF data
-- **VIIRS-M**: VNP43MA1.001 - VIIRS moderate resolution BRDF data
-- **VIIRS-I**: VNP43IA1.001 - VIIRS imaging resolution BRDF data
+- **VIIRS-M**: VNP43MA1.001 - VIIRS moderate resolution BRDF data (750m)
+- **VIIRS-I**: VNP43IA1.001 - VIIRS imaging resolution BRDF data (375m + pan)
 
 ## Prerequisites
 
 - [uv package manager](https://github.com/astral-sh/uv#installation)
 - NASA Earthdata login credentials
-- `swfo-convert` tool (for HDF to H5 conversion)
+- `swfo-convert` tool (For Modis: HDF to H5 conversion)
 
-## Quick Run
+## Authentication
 
+Ideally, set your NASA Earthdata credentials as environment variables:
+
+```bash
+export EARTHDATA_USERNAME="your_username"
+export EARTHDATA_PASSWORD="your_password"
+```
+
+Alternatively, they can be set in the config file (below), but be careful of its permissions.
+
+## Install
+
+`uv run` will automatically set up an environment for it, to run directly:
 ```bash
 uv run fetch2-brdf --help
 ```
 
-Or pip install it:
+Otherwise, you can pip install it:
 
 ```bash
 uv pip install -e .
@@ -39,18 +51,8 @@ uv sync --extra test
 uv run pytest
 ```
 
-(or `. .venv/bin/activate` and `pytest` directly)
+(or enter the environment with `. .venv/bin/activate` to be able to run tools like `pytest` directly)
 
-## Authentication
-
-Ideally, set your NASA Earthdata credentials as environment variables:
-
-```bash
-export EARTHDATA_USERNAME="your_username"
-export EARTHDATA_PASSWORD="your_password"
-```
-
-Alternatively, they can be set in the config file (below), but be aware of its accessibility.
 
 ## Usage
 

@@ -379,7 +379,7 @@ def test_invalid_product_config():
     """Test that invalid product names are rejected during config validation."""
     with pytest.raises(ValueError, match="Unknown product 'invalid_product'"):
         BrdfConfig(
-            output_path="/tmp",
+            output_path=Path("/tmp"),
             products={"invalid_product": {"enabled": True}},
         )
 
@@ -388,7 +388,7 @@ def test_invalid_tile_set_config():
     """Test that invalid tile set names are rejected during config validation."""
     with pytest.raises(ValueError, match="Tile set must be one of"):
         BrdfConfig(
-            output_path="/tmp",
+            output_path=Path("/tmp"),
             tiles="invalid_tiles",
             products={"modis": {"enabled": True}},
         )
@@ -401,24 +401,12 @@ def test_missing_auth_credentials(monkeypatch):
     monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
 
     config = BrdfConfig(
-        output_path="/tmp",
+        output_path=Path("/tmp"),
         products={"modis": {"enabled": True}},
     )
 
     with pytest.raises(ValueError, match="No username/password supplied"):
         config.auth.get_credentials()
-
-
-def test_missing_output_path():
-    """Test that missing output_path is handled appropriately."""
-    config_data = {
-        "products": {"modis": {"enabled": True}},
-        # output_path intentionally missing
-    }
-    test_config = BrdfConfig(**config_data)
-
-    # Should accept None output_path in config validation
-    assert test_config.output_path is None
 
 
 if __name__ == "__main__":

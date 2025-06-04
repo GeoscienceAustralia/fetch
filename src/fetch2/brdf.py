@@ -16,6 +16,7 @@ from concurrent.futures import (
     wait as wait_for_future,
 )
 from datetime import datetime as dt
+from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Set, Tuple, Union, Dict
@@ -209,9 +210,7 @@ class BrdfConfig(BaseModel):
         default="mainland+offshore",
         description="Tile set name (mainland, offshore, mainland+offshore) or path to tile list file",
     )
-    output_path: Optional[Path] = Field(
-        default=None, description="Base output directory for this product"
-    )
+    output_path: Path = Field(description="Base output directory for this product")
     clean_up: bool = Field(
         default=True, description="Clean up intermediate files after conversion"
     )
@@ -334,7 +333,7 @@ def clean_log_values(logger, name, event_dict):
     return event_dict
 
 
-def setup_logging(logging_config: LoggingConfig, product: str = None):
+def setup_logging(logging_config: LoggingConfig):
     """Setup logging configuration."""
     shared_processors = [
         structlog.contextvars.merge_contextvars,
@@ -408,7 +407,7 @@ def get_working_dir(path: Path, create=True) -> Path:
     return temp_path
 
 
-def parse_acq_date(acquisition_date: str) -> dt.date:
+def parse_acq_date(acquisition_date: str) -> date_type:
     """
     Parse the acquisition date from the filename into a date object.
 
@@ -420,7 +419,7 @@ def parse_acq_date(acquisition_date: str) -> dt.date:
     return dt.strptime(acquisition_date, "%Y%j").date()
 
 
-def _iterate_dates(start: dt.date, end: dt.date) -> Iterator[dt.date]:
+def _iterate_dates(start: date_type, end: date_type) -> Iterator[date_type]:
     current = start
     while current <= end:
         yield current
@@ -453,8 +452,10 @@ class BrdfClient:
 
         self.session = httpx.Client(timeout=request_timeout_secs)
 
-        self.min_request_period_secs = min_request_period_secs
-        self.last_request_monotonic = time.monotonic() - min_request_period_secs - 1.0
+        self.min_request_period_secs: float = min_request_period_secs or 0
+        self.last_request_monotonic: float = (
+            time.monotonic() - (self.min_request_period_secs) - 1.0
+        )
 
     def __enter__(self):
         return self
@@ -510,7 +511,7 @@ class BrdfClient:
         )
 
     def find_available_remote_files(
-        self, date: dt.date, tile_numbers: Optional[Set[str]] = None
+        self, date: date_type, tile_numbers: Optional[Set[str]] = None
     ) -> Iterator[Tuple[URL, URL]]:
         """
         This will return a list of available HDF file sets for the given date.
@@ -610,6 +611,10 @@ class BrdfClient:
             retries += 1
             time.sleep(delay)
             delay *= 2
+
+        assert response is not None, (
+            "If Response is None, we should have raised an exception"
+        )
         return response
 
     def download_file(self, url: URL, output_base_folder: Path) -> Optional[Path]:
@@ -644,15 +649,15 @@ class BrdfClient:
 def find_days_with_missing_brdf_tiles(
     folder: Path,
     expected_brdf_tiles: Iterable[str],
-    start_date: Optional[dt.date],
-    end_date: Optional[dt.date],
-) -> Iterator[Tuple[dt.date, Set[str]]]:
+    start_date: Optional[date_type],
+    end_date: Optional[date_type],
+) -> Iterator[Tuple[date_type, Set[str]]]:
     """
     For all dates in the folder, yield any dates without the full set of expected brdf tiles.
 
     Expects the standard structure in the given output folder: folder/YYYY.MM.DD/*.h5
     """
-    date = end_date + timedelta(days=1)
+    date = (end_date or datetime.date.today()) + timedelta(days=1)
 
     while date > start_date:
         date -= timedelta(days=1)
@@ -703,8 +708,8 @@ def download_files(
     max_workers: int = 3,
     max_downloads: int = sys.maxsize,
     clean_up: bool = True,
-    no_older_than: datetime.date = None,
-    no_newer_than: datetime.date = None,
+    no_older_than: Optional[datetime.date] = None,
+    no_newer_than: Optional[datetime.date] = None,
     request_timeout_secs: float = 180,
     min_request_period_secs: float = 0.3,
 ):
@@ -733,12 +738,10 @@ def download_files(
     ) as client:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             tasks = []
-
-            active_task_count = 0
+            active_task_count = [0]  # Using list for mutable reference
 
             def done_one(_: Future):
-                nonlocal active_task_count
-                active_task_count -= 1
+                active_task_count[0] -= 1
 
             def completed(f: Future):
                 try:
@@ -777,12 +780,12 @@ def download_files(
                         continue
 
                     last_queue_log = 0
-                    while active_task_count >= max_queue_size:
+                    while active_task_count[0] >= max_queue_size:
                         # Don't log more often than every 10 seconds if stuck here.
                         if time.monotonic() - last_queue_log > 10:
                             log.debug(
                                 "full_queue",
-                                active_task_count=active_task_count,
+                                active_task_count=active_task_count[0],
                                 max_queue_size=max_queue_size,
                                 task_count=len(tasks),
                             )
@@ -810,7 +813,7 @@ def download_files(
                             target_dir,
                             clean_up,
                         )
-                        active_task_count += 1
+                        active_task_count[0] += 1
                         task.add_done_callback(done_one)
                         tasks.append(task)
                     count += 1
@@ -1008,11 +1011,11 @@ def run_with_config(config: BrdfConfig):
 
         # Resolve date range
         global_start, global_end = None, None
-        if config.date_range:
+        if config.date_range is not None:
             global_start, global_end = config.date_range.resolve_dates()
 
         product_start, product_end = global_start, global_end
-        if product_config.date_range:
+        if product_config.date_range is not None:
             product_start, product_end = product_config.date_range.resolve_dates()
 
         log.info(

@@ -27,7 +27,6 @@ import structlog
 import yaml
 from pydantic import BaseModel, Field, field_validator
 from httpx import URL
-from lxml import etree
 
 # ipv6 has issues to USGS from NCI. Disable it.
 import urllib3.util.connection
@@ -48,15 +47,21 @@ LOG = structlog.get_logger()
 # We convert them into one .h5 file.
 #
 _BRDF_FILENAME_PATTERN = re.compile(
-    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.[0-9]{3}\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z5]+)$"
+    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.[0-9]{3}\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z5]+)?$"
 )
 # Folder pattern YYYY.MM.DD
 _DATE_FOLDER_PATTERN = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}")
 
 _KNOWN_PRODUCTS = {
-    "modis": ("MOTA/MCD43A1.061", "BRDF/MCD43A1.061"),
-    "viirs_m": ("VIIRS/VNP43MA1.001", "BRDF/VNP43MA1.001"),
-    "viirs_i": ("VIIRS/VNP43IA1.001", "BRDF/VNP43IA1.001"),
+    "modis": {"concept_id": "C2343116130-LPCLOUD", "output_path": "BRDF/MCD43A1.061"},
+    "viirs_m": {
+        "concept_id": "C2545314596-LPCLOUD",
+        "output_path": "BRDF/VNP43MA1.002",
+    },
+    "viirs_i": {
+        "concept_id": "C2545314578-LPCLOUD",
+        "output_path": "BRDF/VNP43IA1.002",
+    },
 }
 # Tiles are (h, v) coordinates, as seen in the filename
 TILE_SETS = {
@@ -147,25 +152,21 @@ class DownloadConfig(BaseModel):
 class AuthConfig(BaseModel):
     """Authentication configuration."""
 
-    username: Optional[str] = Field(
-        default=None, description="usgs username (if not $EARTHDATA_USERNAME)"
-    )
-    password: Optional[str] = Field(
-        default=None, description="usgs password (if not $EARTHDATA_PASSWORD)"
+    token: Optional[str] = Field(
+        default=None, description="earthdata token (if not $EARTHDATA_TOKEN)"
     )
 
-    def get_credentials(self) -> Tuple[str, str]:
-        """Get credentials from config or environment variables."""
-        username = self.username or os.environ.get("EARTHDATA_USERNAME")
-        password = self.password or os.environ.get("EARTHDATA_PASSWORD")
+    def get_token(self) -> str:
+        """Get token from config or environment variables."""
+        token = self.token or os.environ.get("EARTHDATA_TOKEN")
 
-        if not username or not password:
+        if not token:
             raise ValueError(
-                "No username/password supplied. Set in config file or use "
-                "EARTHDATA_USERNAME/EARTHDATA_PASSWORD environment variables"
+                "No token supplied. Set in config file or use "
+                "EARTHDATA_TOKEN environment variable"
             )
 
-        return username, password
+        return token
 
 
 class LoggingConfig(BaseModel):
@@ -427,28 +428,20 @@ def _iterate_dates(start: date_type, end: date_type) -> Iterator[date_type]:
 
 
 class BrdfClient:
-    TRUSTED_HOSTS = {
-        "e4ftl01.cr.usgs.gov",
-        "urs.earthdata.nasa.gov",
-    }
+    CMR_GRANULE_URL = "https://cmr.earthdata.nasa.gov/search/granules"
 
     def __init__(
         self,
-        product_offset: str,
+        collection_concept_id: str,
         *,
         max_retries: Optional[int] = 3,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        token: Optional[str] = None,
         min_request_period_secs: Optional[float] = 0.3,
         request_timeout_secs: Optional[float] = 180,
-        host_url: Optional[str] = "https://e4ftl01.cr.usgs.gov",
     ):
         self.max_retries = max_retries
-
-        self.service_root_url: URL = URL(f"{host_url}/{product_offset}/")
-
-        self.username = username
-        self.password = password
+        self.collection_concept_id = collection_concept_id
+        self.token = token
 
         self.session = httpx.Client(timeout=request_timeout_secs)
 
@@ -463,133 +456,149 @@ class BrdfClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.session.close()
 
-    def _yield_directory_page_links(self, url: URL) -> Iterable[URL]:
-        """
-        Assuming the given URL is a directory page, yield all the links it
-        can find.
-
-        (ie. folders and filenames linked to)
-        """
-        response = self._get_with_retries(url)
-
-        # This can be common as we're scanning through days of the year. Some may not exist yet.
-        if response.status_code == 404:
-            LOG.info("directory_not_found", url=url)
-            return
-
-        page = etree.fromstring(response.text, parser=etree.HTMLParser())
-        for anchor in page.xpath("//a"):
-            name = anchor.text
-
-            if "href" not in anchor.attrib:
-                continue
-
-            href = anchor.attrib["href"]
-            source_url = response.url.join(href)
-
-            # Many links on page are not files. They're empty (images) or have other names like "back".
-
-            # Empty anchor
-            if not name:
-                continue
-
-            # Not a filename
-            if not href.endswith(name):
-                continue
-
-            yield source_url
+    def _get_cmr_headers(self) -> Dict[str, str]:
+        """Returns headers for CMR API requests, including auth token if available."""
+        headers = {"Accept": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        return headers
 
     def find_available_date_range(self) -> Tuple[datetime.date, datetime.date]:
-        # Root page has subfolders for each day: YYYY.MM.DD
-        available_days = sorted(
-            url_filename(url)
-            for url in self._yield_directory_page_links(self.service_root_url)
-            if _DATE_FOLDER_PATTERN.match(url_filename(url))
-        )
-        return _parse_day_folder(available_days[0]), _parse_day_folder(
-            available_days[-1]
-        )
+        """Find the available date range for this collection."""
+        # Query CMR for earliest and latest granules
+        params = {
+            "collection_concept_id": self.collection_concept_id,
+            "page_size": 1,
+            "sort_key": "start_date",
+        }
+
+        # Get earliest
+        response = self._get_with_retries(URL(self.CMR_GRANULE_URL), params=params)
+        data = response.json()
+        earliest_granule = data.get("feed", {}).get("entry", [])
+
+        # Get latest
+        params["sort_key"] = "-start_date"
+        response = self._get_with_retries(URL(self.CMR_GRANULE_URL), params=params)
+        data = response.json()
+        latest_granule = data.get("feed", {}).get("entry", [])
+
+        if not earliest_granule or not latest_granule:
+            raise RuntimeError(
+                f"No granules found for collection {self.collection_concept_id}"
+            )
+
+        earliest_date = dt.fromisoformat(
+            earliest_granule[0]["time_start"].replace("Z", "+00:00")
+        ).date()
+        latest_date = dt.fromisoformat(
+            latest_granule[0]["time_start"].replace("Z", "+00:00")
+        ).date()
+
+        return earliest_date, latest_date
 
     def find_available_remote_files(
         self, date: date_type, tile_numbers: Optional[Set[str]] = None
     ) -> Iterator[Tuple[URL, URL]]:
         """
-        This will return a list of available HDF file sets for the given date.
+        Find available BRDF files for the given date using CMR API.
 
-        All files come in pairs: there is a `.hdf` and an identically named `.hdf.xml` extension.
-
-        It will yield each available pair of URLs for the day.
+        Returns tuples of (data_url, xml_url) for each available file.
         """
-        day_url = self.service_root_url.join(f"{date:%Y.%m.%d}/")
+        start_date = date
+        end_date = date + timedelta(days=1)
+        temporal_range = (
+            f"{start_date.isoformat()}T00:00:00Z,{end_date.isoformat()}T00:00:00Z"
+        )
 
-        file_urls = set(self._yield_directory_page_links(day_url))
-        for file_url in file_urls:
-            match = _BRDF_FILENAME_PATTERN.match(url_filename(file_url))
+        params = {
+            "collection_concept_id": self.collection_concept_id,
+            "temporal": temporal_range,
+            "page_size": 2000,
+        }
+
+        all_granules = []
+        search_after = None
+
+        while True:
+            headers = self._get_cmr_headers()
+            if search_after:
+                headers["CMR-Search-After"] = search_after
+
+            response = self._get_with_retries(
+                URL(self.CMR_GRANULE_URL), params=params, headers=headers
+            )
+            data = response.json()
+
+            granules = data.get("feed", {}).get("entry", [])
+            if not granules:
+                break
+
+            all_granules.extend(granules)
+
+            # Check if there are more results
+            search_after = response.headers.get("CMR-Search-After")
+            if not search_after:
+                break
+
+        for granule in all_granules:
+            # Extract tile information from granule title
+            title = granule.get("title", "")
+            match = _BRDF_FILENAME_PATTERN.match(title)
             if not match:
                 continue
 
             if tile_numbers and match.group("tile_number") not in tile_numbers:
                 continue
 
-            # Make sure it's the data extension (we don't need to yield the .hdf.xml separately)
-            if match.group("extension") not in (".hdf", ".h5"):
-                continue
+            # Find download links (prefer HTTPS over S3)
+            data_url = None
+            xml_url = None
 
-            # Make sure we have a matching `.hdf.xml` file.
-            expected_xml_url = URL(str(file_url) + ".xml")
+            for link in granule.get("links", []):
+                href = link.get("href", "")
+                if href.endswith(".hdf") or href.endswith(".h5"):
+                    if "opendap" not in href:
+                        # Prefer HTTPS URLs over S3 URLs
+                        if data_url is None or (
+                            href.startswith("https://")
+                            and str(data_url).startswith("s3://")
+                        ):
+                            data_url = URL(href)
+                elif href.endswith(".xml"):  # Match any .xml file (including .cmr.xml)
+                    # Prefer HTTPS URLs over S3 URLs for XML too
+                    if xml_url is None or (
+                        href.startswith("https://") and str(xml_url).startswith("s3://")
+                    ):
+                        xml_url = URL(href)
 
-            if expected_xml_url not in file_urls:
-                # Perhaps it's still being generated. This should rarely happen, if ever?
-                LOG.info("remote_brdf_without_xml", brdf_url=file_url)
-                continue
+            if data_url and xml_url:
+                yield data_url, xml_url
 
-            # A pair of .hdf and .hdf.xml files
-            yield file_url, expected_xml_url
-
-    def _get_with_retries(self, url: URL, include_auth=False) -> httpx.Response:
+    def _get_with_retries(
+        self, url: URL, params: Optional[Dict] = None, headers: Optional[Dict] = None
+    ) -> httpx.Response:
         retries = 0
         delay = 5
+
         while True:
             LOG.info("get_with_retries", url=url, retries=retries)
             response = None
 
             try:
-                request = self.session.build_request("GET", url)
-                while request is not None:
-                    # Delay if needed, to not request more often than allowed.
-                    next_request_allowed_in = (
-                        self.last_request_monotonic + self.min_request_period_secs
-                    ) - time.monotonic()
-                    if next_request_allowed_in > 0:
-                        time.sleep(next_request_allowed_in)
+                # Delay if needed, to not request more often than allowed.
+                next_request_allowed_in = (
+                    self.last_request_monotonic + self.min_request_period_secs
+                ) - time.monotonic()
+                if next_request_allowed_in > 0:
+                    time.sleep(next_request_allowed_in)
 
-                    args = {}
-                    if include_auth:
-                        if not self.username or not self.password:
-                            raise ValueError(
-                                "No username/password supplied, but operation requires auth"
-                            )
-                        args["auth"] = (self.username, self.password)
+                request_headers = self._get_cmr_headers()
+                if headers:
+                    request_headers.update(headers)
 
-                    response = self.session.send(
-                        request, **args, follow_redirects=False
-                    )
-
-                    headers_used = dict(request.headers.items())
-                    request = response.next_request
-
-                    self.last_request_monotonic = time.monotonic()
-
-                    if (
-                        include_auth
-                        and request
-                        and request.url.host in self.TRUSTED_HOSTS
-                    ):
-                        if not headers_used["authorization"]:
-                            raise RuntimeError(
-                                f"Expected to have an authorization header for {request.url}"
-                            )
-                        request.headers["authorization"] = headers_used["authorization"]
+                response = self.session.get(url, params=params, headers=request_headers)
+                self.last_request_monotonic = time.monotonic()
 
             except httpx.ReadTimeout:
                 LOG.info("request_timeout", url=url)
@@ -617,33 +626,43 @@ class BrdfClient:
         )
         return response
 
-    def download_file(self, url: URL, output_base_folder: Path) -> Optional[Path]:
+    def download_file(
+        self, url: URL, output_folder: Path, filename: str
+    ) -> Optional[Path]:
         """
-        Download the given URL to the given output folder.
+        Download the given URL to the given output folder with the specified filename.
 
-        It will use the same subdirectory and names structure as USGS's own URLs:
-
-        eg. /MOTA/MCD43A1.061/2002.04.12/MCD43A1.A2002102.h23v01.061.2020087195553.hdf
-
-        It will return the path inside your folder of the downloaded file.
+        Returns the path of the downloaded file.
         """
-        path = (output_base_folder / url.path[1:]).resolve()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        log = LOG.bind(url=url)
+        output_folder.mkdir(parents=True, exist_ok=True)
+        path = output_folder / filename
+        log = LOG.bind(url=url, filename=filename)
 
         if path.exists():
             log.info("already_downloaded", path=path)
             return path
+
         tmp_path = path.with_name(f".incomplete.{path.name}")
 
-        # We aren't doing chunked as these are small.
-        response = self._get_with_retries(url, include_auth=True)
-        response.raise_for_status()
-        with tmp_path.open("wb") as f:
-            f.write(response.content)
+        try:
+            # Use streaming download for potentially large files
+            with self.session.stream(
+                "GET", url, headers=self._get_cmr_headers(), follow_redirects=True
+            ) as response:
+                response.raise_for_status()
+                with tmp_path.open("wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
 
-        tmp_path.rename(path)
-        return path
+            tmp_path.rename(path)
+            log.info("download_complete", path=path)
+            return path
+
+        except Exception as e:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            log.error("download_failed", error=str(e))
+            raise
 
 
 def find_days_with_missing_brdf_tiles(
@@ -701,8 +720,7 @@ def download_files(
     product: str,
     required_brdf_tiles: Set[str],
     output_base_path: Path,
-    username: str,
-    password: str,
+    token: str,
     max_retries: int = 4,
     max_queue_size: int = 3,
     max_workers: int = 3,
@@ -725,14 +743,15 @@ def download_files(
             f"Unknown product {product}. Must be one of {_KNOWN_PRODUCTS.keys()}"
         )
 
-    product_offset, output_offset = _KNOWN_PRODUCTS[product]
+    product_config = _KNOWN_PRODUCTS[product]
+    collection_concept_id = product_config["concept_id"]
+    output_offset = product_config["output_path"]
     output_base_path = output_base_path / output_offset
 
     with BrdfClient(
-        product_offset=product_offset,
+        collection_concept_id=collection_concept_id,
         max_retries=max_retries,
-        username=username,
-        password=password,
+        token=token,
         request_timeout_secs=request_timeout_secs,
         min_request_period_secs=min_request_period_secs,
     ) as client:
@@ -767,14 +786,17 @@ def download_files(
 
                 log.info("running_day", possible_missing_tiles=missing_tiles)
 
-                for hdf_url, hdf_xml_url in client.find_available_remote_files(
+                for data_url, xml_url in client.find_available_remote_files(
                     date, tile_numbers=required_brdf_tiles
                 ):
-                    hdf_name = url_filename(hdf_url)
+                    # Extract filename from URL
+                    data_filename = data_url.path.split("/")[-1]
 
-                    log = log.bind(hdf_name=hdf_name)
+                    log = log.bind(data_filename=data_filename)
 
-                    expected_output_h5 = target_dir / hdf_name.replace(".hdf", ".h5")
+                    expected_output_h5 = target_dir / data_filename.replace(
+                        ".hdf", ".h5"
+                    )
                     if expected_output_h5.exists():
                         log.debug("skip_existing", output_h5=expected_output_h5)
                         continue
@@ -799,7 +821,7 @@ def download_files(
                     if count < 1:
                         download_and_convert(
                             client,
-                            (hdf_url, hdf_xml_url),
+                            (data_url, xml_url),
                             staging_dir,
                             target_dir,
                             clean_up,
@@ -808,7 +830,7 @@ def download_files(
                         task: Future = executor.submit(
                             download_and_convert,
                             client,
-                            (hdf_url, hdf_xml_url),
+                            (data_url, xml_url),
                             staging_dir,
                             target_dir,
                             clean_up,
@@ -860,14 +882,19 @@ def download_and_convert(
     # (Yes, Client is thread safe, and more efficient than a client-per-thread:
     #  https://github.com/encode/httpx/discussions/1633)
 
-    file_url, file_xml_url = url_set
-    log = LOG.bind(hdf_name=url_filename(file_url))
+    data_url, xml_url = url_set
 
-    file_path = client.download_file(file_url, staging_folder)
-    file_xml_path = client.download_file(file_xml_url, staging_folder)
+    # Extract filenames from URLs
+    data_filename = data_url.path.split("/")[-1]
+    xml_filename = xml_url.path.split("/")[-1]
+
+    log = LOG.bind(data_filename=data_filename)
+
+    file_path = client.download_file(data_url, staging_folder, data_filename)
+    file_xml_path = client.download_file(xml_url, staging_folder, xml_filename)
 
     if file_path is None or file_xml_path is None:
-        log.error("download_failed", hdf_path=file_path, hdf_xml_path=file_xml_path)
+        log.error("download_failed", data_path=file_path, xml_path=file_xml_path)
         return
 
     # VIIRS comes as h5, so no conversion needed!
@@ -973,7 +1000,7 @@ def run_with_config(config: BrdfConfig):
     setup_logging(config.logging)
 
     log = structlog.get_logger()
-    username, password = config.auth.get_credentials()
+    token = config.auth.get_token()
 
     enabled_products = config.get_enabled_products()
     if not enabled_products:
@@ -1030,8 +1057,7 @@ def run_with_config(config: BrdfConfig):
                 product=product_name,
                 required_brdf_tiles=tiles,
                 output_base_path=config.output_path,
-                username=username,
-                password=password,
+                token=token,
                 max_retries=config.download.max_retries,
                 max_queue_size=config.download.max_queue_size,
                 max_workers=config.download.max_workers,

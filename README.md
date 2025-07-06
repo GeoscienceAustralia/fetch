@@ -1,6 +1,8 @@
 # fetch2
 
-This is a rewrite of the brdf downloader that allow gaps to be filled in a more efficient way.
+This is a rewrite of the BRDF downloader that allows gaps to be filled in a more efficient way.
+
+It uses NASA's CMR (Common Metadata Repository) API to download BRDF (Bidirectional Reflectance Distribution Function) data products from satellite missions.
 
 It takes a date range (defaulting to all available) and tiles (defaulting to DEA's mainland+offshore areas), and will
 find and fill in any gaps in the output folder.
@@ -11,8 +13,8 @@ to manage multiple products and collections.
 ## Supported Products
 
 - **MODIS**: MCD43A1.061 - Terra/Aqua combined BRDF data
-- **VIIRS-M**: VNP43MA1.001 - VIIRS moderate resolution BRDF data (750m)
-- **VIIRS-I**: VNP43IA1.001 - VIIRS imaging resolution BRDF data (375m + pan)
+- **VIIRS-M**: VNP43MA1.002 - VIIRS moderate resolution BRDF data (750m)
+- **VIIRS-I**: VNP43IA1.002 - VIIRS imaging resolution BRDF data (375m + pan)
 
 ## Prerequisites
 
@@ -22,14 +24,19 @@ to manage multiple products and collections.
 
 ## Authentication
 
-Ideally, set your NASA Earthdata credentials as environment variables:
+You need a NASA Earthdata Bearer Token for authentication. Set it as an environment variable:
 
 ```bash
-export EARTHDATA_USERNAME="your_username"
-export EARTHDATA_PASSWORD="your_password"
+export EARTHDATA_TOKEN="your_bearer_token"
 ```
 
-Alternatively, they can be set in the config file (below), but be careful of its permissions.
+**How to get a Bearer Token:**
+1. Go to [NASA Earthdata Login](https://urs.earthdata.nasa.gov/)
+2. Log in with your NASA Earthdata account
+3. Go to "My Profile" → "Generate Token"
+4. Copy the generated token
+
+Alternatively, the token can be set in the config file (below), but be careful of its permissions.
 
 ## Install
 
@@ -81,6 +88,9 @@ fetch2-brdf run
 An example config:
 
 ```yaml
+# Authentication (alternatively set EARTHDATA_TOKEN environment variable)
+auth:
+    token: "your_earthdata_bearer_token_here"
 
 logging:
     verbose: false
@@ -92,15 +102,18 @@ date_range:
     end: -7 # 7 days ago
 
 tiles: mainland+offshore
+output_path: /g/data/v10/eoancillarydata-2
 
 # Products to download
 products:
     modis:
         enabled: true
     viirs_m:
-        enabled: true
+        enabled: false  # Enable when needed
         date_range:
             begin: 2024-01-01
+    viirs_i:
+        enabled: false  # Enable when needed
 ```
 
 ## Tile Configuration
@@ -135,10 +148,10 @@ Example:
 │   │   ├── 2024.03.15/
 │   │   │   ├── MCD43A1.A2024075.h27v09.061.2024084123456.h5
 │   │   │   └── MCD43A1.A2024075.h27v09.061.2024084123456.h5.xml
-│   └── VNP43MA1.001/
+│   └── VNP43MA1.002/
 │       └── 2024.03.15/
-│           ├── VNP43MA1.A2024075.h27v09.001.2024084123456.h5
-│           └── VNP43MA1.A2024075.h27v09.001.2024084123456.h5.xml
+│           ├── VNP43MA1.A2024075.h27v09.002.2024084123456.h5
+│           └── VNP43MA1.A2024075.h27v09.002.2024084123456.h5.xml
 ```
 
 ## Logging
@@ -156,6 +169,16 @@ Supported variables:
 
 - `{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`
 - `{product}` - The product being downloaded
+
+## Data Source
+
+The downloader uses NASA's CMR (Common Metadata Repository) API to discover and download BRDF data:
+
+- **API Endpoint**: `https://cmr.earthdata.nasa.gov/search/granules`
+- **Collection Concept IDs**:
+  - MODIS MCD43A1.061: `C2343116130-LPCLOUD`
+  - VIIRS VNP43MA1.002: `C2545314596-LPCLOUD`
+  - VIIRS VNP43IA1.002: `C2545314578-LPCLOUD`
 
 ## Configuration File Locations
 

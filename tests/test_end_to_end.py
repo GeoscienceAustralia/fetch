@@ -13,82 +13,101 @@ from flask import Flask, abort
 from fetch2.brdf import BrdfConfig, run_with_config
 
 
-class USGSTestServer:
-    """A dummy HTTP server to mimic USGS responses."""
+class CMRTestServer:
+    """A dummy HTTP server to mimic CMR API responses."""
 
     def __init__(self):
         self.app = Flask(__name__)
         self.setup_routes()
-        self.directory_pages = {}
+        self.granules = []
         self.files = {}
         self.server = None
         self.thread = None
         self.port = None
 
-    def add_directory_page(self, path: str, links: list):
-        """Add a directory page with links."""
-        self.directory_pages[path] = links
+    def add_granule(self, granule_data: dict):
+        """Add a granule to the mock CMR responses."""
+        self.granules.append(granule_data)
 
     def add_file(self, path: str, content: bytes):
         """Add a file to be served."""
         self.files[path] = content
 
     def setup_routes(self):
-        @self.app.route("/<path:path>")
-        def serve_path(path):
-            full_path = "/" + path
+        @self.app.route("/search/granules")
+        def search_granules():
+            import json
 
-            # Check if it's a directory page
-            if full_path in self.directory_pages:
-                links = self.directory_pages[full_path]
-                html_content = "<html><body>"
-                for link in links:
-                    html_content += f'<a href="{link}">{link}</a>'
-                html_content += "</body></html>"
-                return html_content
+            # Mock CMR granule search response
+            response_data = {"feed": {"entry": self.granules}}
+
+            return json.dumps(response_data), 200, {"Content-Type": "application/json"}
+
+        @self.app.route("/download/<path:path>")
+        def serve_file(path):
+            full_path = "/download/" + path
 
             # Check if it's a file
-            elif full_path in self.files:
+            if full_path in self.files:
                 content = self.files[full_path]
                 return content
-
-            # Return 404 for unknown paths
             else:
                 abort(404)
 
     def setup_typical_data(self):
-        """Setup typical BRDF data structure."""
-        # Add root directory with date folders
+        """Setup typical BRDF data structure as CMR granules."""
         today = date.today()
         yesterday = today - timedelta(days=1)
 
-        self.add_directory_page(
-            "/MOTA/MCD43A1.061/",
-            [f"{yesterday.strftime('%Y.%m.%d')}/", f"{today.strftime('%Y.%m.%d')}/"],
-        )
+        base_url = f"http://localhost:{self.port}/download"
 
-        # Add yesterday's directory with BRDF files
-        yesterday_path = f"/MOTA/MCD43A1.061/{yesterday.strftime('%Y.%m.%d')}/"
-        test_files = [
-            f"MCD43A1.A{yesterday.strftime('%Y%j')}.h27v09.061.2024084123456.hdf",
-            f"MCD43A1.A{yesterday.strftime('%Y%j')}.h27v09.061.2024084123456.hdf.xml",
-            f"MCD43A1.A{yesterday.strftime('%Y%j')}.h28v09.061.2024084123457.hdf",
-            f"MCD43A1.A{yesterday.strftime('%Y%j')}.h28v09.061.2024084123457.hdf.xml",
+        # Create mock granules
+        test_granules = [
+            {
+                "id": "G123456789-LPCLOUD",
+                "title": f"MCD43A1.A{yesterday.strftime('%Y%j')}.h27v09.061.2024084123456.hdf",
+                "time_start": f"{yesterday.isoformat()}T00:00:00Z",
+                "links": [
+                    {
+                        "href": f"{base_url}/MCD43A1.A{yesterday.strftime('%Y%j')}.h27v09.061.2024084123456.hdf"
+                    },
+                    {
+                        "href": f"{base_url}/MCD43A1.A{yesterday.strftime('%Y%j')}.h27v09.061.2024084123456.hdf.xml"
+                    },
+                ],
+            },
+            {
+                "id": "G123456790-LPCLOUD",
+                "title": f"MCD43A1.A{yesterday.strftime('%Y%j')}.h28v09.061.2024084123457.hdf",
+                "time_start": f"{yesterday.isoformat()}T00:00:00Z",
+                "links": [
+                    {
+                        "href": f"{base_url}/MCD43A1.A{yesterday.strftime('%Y%j')}.h28v09.061.2024084123457.hdf"
+                    },
+                    {
+                        "href": f"{base_url}/MCD43A1.A{yesterday.strftime('%Y%j')}.h28v09.061.2024084123457.hdf.xml"
+                    },
+                ],
+            },
         ]
-        self.add_directory_page(yesterday_path, test_files)
 
-        # Add file contents
-        for filename in test_files:
-            file_path = yesterday_path + filename
-            if filename.endswith(".hdf"):
-                # Mock HDF content
-                self.add_file(file_path, b"MOCK_HDF_CONTENT_" + filename.encode())
-            else:
-                # Mock XML content
-                self.add_file(
-                    file_path,
-                    f'<?xml version="1.0"?><metadata>{filename}</metadata>'.encode(),
-                )
+        for granule in test_granules:
+            self.add_granule(granule)
+
+            # Add file contents
+            for link in granule["links"]:
+                filename = link["href"].split("/")[-1]
+                file_path = f"/download/{filename}"
+
+                if filename.endswith(".hdf"):
+                    # Mock HDF content
+                    self.add_file(file_path, b"MOCK_HDF_CONTENT_" + filename.encode())
+                else:
+                    # Mock XML content
+                    self.add_file(
+                        file_path,
+                        f'<?xml version="1.0"?><metadata>{filename}</metadata>'.encode(),
+                    )
 
     def start(self):
         """Start the test server on a random port."""
@@ -130,11 +149,11 @@ def temp_dir():
 
 
 @pytest.fixture
-def test_usgs_server():
-    """Create and start a test USGS server."""
-    server = USGSTestServer()
-    server.setup_typical_data()
+def test_cmr_server():
+    """Create and start a test CMR server."""
+    server = CMRTestServer()
     server.start()
+    server.setup_typical_data()  # Setup after starting so we have the port
     yield server
     server.stop()
 
@@ -166,17 +185,19 @@ def test_config(temp_dir):
 @pytest.fixture
 def mocked_environment(monkeypatch):
     """Fixture that sets up environment variables for auth."""
-    monkeypatch.setenv("EARTHDATA_USERNAME", "test_user")
-    monkeypatch.setenv("EARTHDATA_PASSWORD", "test_pass")
+    monkeypatch.setenv(
+        "EARTHDATA_TOKEN",
+        "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlf",
+    )
 
 
 @pytest.fixture
-def patched_brdf_system(test_usgs_server, mocked_environment):
+def patched_brdf_system(test_cmr_server, mocked_environment):
     """Combined fixture that patches both BrdfClient and subprocess for full system tests."""
     with (
         patch(
             "fetch2.brdf.BrdfClient.__init__",
-            patch_brdf_client_url(test_usgs_server.get_base_url()),
+            patch_brdf_client_url(test_cmr_server.get_base_url()),
         ),
         patch("fetch2.brdf.subprocess.run", side_effect=mock_swfo_convert),
         patch("fetch2.brdf.check_swfo_convert_available", return_value=True),
@@ -185,16 +206,18 @@ def patched_brdf_system(test_usgs_server, mocked_environment):
 
 
 def patch_brdf_client_url(test_server_url: str):
-    """Patch the BrdfClient to use our test server instead of the real USGS server."""
+    """Patch the BrdfClient to use our test server instead of the real CMR API."""
 
     # Store the original __init__ method
     from fetch2.brdf import BrdfClient
 
     original_init = BrdfClient.__init__
 
-    def patched_init(self, product_offset, **kwargs):
-        # Call the original __init__ method with our host
-        original_init(self, product_offset, **kwargs, host_url=test_server_url)
+    def patched_init(self, collection_concept_id, **kwargs):
+        # Call the original __init__ method but override the CMR URL
+        original_init(self, collection_concept_id, **kwargs)
+        # Replace the CMR URL with our test server
+        self.CMR_GRANULE_URL = f"{test_server_url}/search/granules"
 
     return patched_init
 
@@ -292,8 +315,7 @@ def test_config_based_execution_with_cli(temp_dir):
 
 def test_environment_variable_auth(temp_dir, monkeypatch):
     """Test that authentication works via environment variables."""
-    monkeypatch.setenv("EARTHDATA_USERNAME", "env_user")
-    monkeypatch.setenv("EARTHDATA_PASSWORD", "env_pass")
+    monkeypatch.setenv("EARTHDATA_TOKEN", "test_token_value")
 
     # Create config without auth credentials
     config_data = {
@@ -302,10 +324,9 @@ def test_environment_variable_auth(temp_dir, monkeypatch):
     }
     test_config = BrdfConfig(**config_data)
 
-    username, password = test_config.auth.get_credentials()
+    token = test_config.auth.get_token()
 
-    assert username == "env_user"
-    assert password == "env_pass"
+    assert token == "test_token_value"
 
 
 def test_tile_resolution():
@@ -362,6 +383,7 @@ def test_no_enabled_products(temp_dir, mocked_environment):
         "products": {
             "modis": {"enabled": False},
             "viirs_m": {"enabled": False},
+            "viirs_i": {"enabled": False},
         },
     }
     test_config = BrdfConfig(**config_data)
@@ -397,16 +419,15 @@ def test_invalid_tile_set_config():
 def test_missing_auth_credentials(monkeypatch):
     """Test that missing authentication credentials raise appropriate error."""
     # Clear any existing environment variables
-    monkeypatch.delenv("EARTHDATA_USERNAME", raising=False)
-    monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
+    monkeypatch.delenv("EARTHDATA_TOKEN", raising=False)
 
     config = BrdfConfig(
         output_path=Path("/tmp"),
         products={"modis": {"enabled": True}},
     )
 
-    with pytest.raises(ValueError, match="No username/password supplied"):
-        config.auth.get_credentials()
+    with pytest.raises(ValueError, match="No token supplied"):
+        config.auth.get_token()
 
 
 if __name__ == "__main__":

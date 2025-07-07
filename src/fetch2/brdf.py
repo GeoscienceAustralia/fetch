@@ -351,6 +351,7 @@ def setup_logging(logging_config: LoggingConfig):
         logging_config.get_log_path("brdf") if logging_config.log_file_pattern else None
     )
     if log_path:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         log_obj = log_path.open("a")
         sys.stderr.write(f"Logging to {log_path}\n")
     else:
@@ -794,6 +795,23 @@ def download_files(
 
                     log = log.bind(data_filename=data_filename)
 
+                    # Verify the file is actually for the date we're looking for
+                    match = _BRDF_FILENAME_PATTERN.match(data_filename)
+                    if not match:
+                        log.info("filename_pattern_mismatch", filename=data_filename)
+                        continue
+
+                    # Check if acquisition date matches the query date
+                    acquisition_date = parse_acq_date(match.group("acquisition_date"))
+                    if acquisition_date != date:
+                        log.info(
+                            "not_correct_day",
+                            query_date=date,
+                            acquisition_date=acquisition_date,
+                            filename=data_filename,
+                        )
+                        continue
+
                     expected_output_h5 = target_dir / data_filename.replace(
                         ".hdf", ".h5"
                     )
@@ -886,7 +904,13 @@ def download_and_convert(
 
     # Extract filenames from URLs
     data_filename = data_url.path.split("/")[-1]
-    xml_filename = xml_url.path.split("/")[-1]
+    xml_filename_from_url = xml_url.path.split("/")[-1]
+
+    # For .hdf files, the XML should be named {data_filename}.xml for conversion
+    if data_filename.endswith(".hdf"):
+        xml_filename = f"{data_filename}.xml"
+    else:
+        xml_filename = xml_filename_from_url
 
     log = LOG.bind(data_filename=data_filename)
 

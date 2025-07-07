@@ -417,6 +417,8 @@ def parse_acq_date(acquisition_date: str) -> date_type:
 
     >>> parse_acq_date('2024075')
     datetime.date(2024, 3, 15)
+    >>> parse_acq_date('2025175')
+    datetime.date(2025, 6, 17)
     """
     return dt.strptime(acquisition_date, "%Y%j").date()
 
@@ -778,17 +780,15 @@ def download_files(
             if no_newer_than:
                 end_date = min(end_date, no_newer_than)
 
-            for date, missing_tiles in find_days_with_missing_brdf_tiles(
-                output_base_path, required_brdf_tiles, start_date, end_date
-            ):
-                log = LOG.bind(date=date)
-                target_dir = output_base_path / f"{date:%Y.%m.%d}"
-                staging_dir = get_working_dir(target_dir)
-
-                log.info("running_day", possible_missing_tiles=missing_tiles)
+            # Search across creation date range instead of limiting to specific acquisition dates
+            # This allows us to find files that were created days after acquisition
+            current_date = start_date
+            while current_date <= end_date:
+                log = LOG.bind(creation_date=current_date)
+                log.info("searching_by_creation_date", creation_date=current_date)
 
                 for data_url, xml_url in client.find_available_remote_files(
-                    date, tile_numbers=required_brdf_tiles
+                    current_date, tile_numbers=required_brdf_tiles
                 ):
                     # Extract filename from URL
                     data_filename = data_url.path.split("/")[-1]
@@ -801,18 +801,16 @@ def download_files(
                         log.info("filename_pattern_mismatch", filename=data_filename)
                         continue
 
-                    # Check if acquisition date matches the query date
+                    # Parse acquisition date from filename for proper directory placement
                     acquisition_date = parse_acq_date(match.group("acquisition_date"))
-                    if acquisition_date != date:
-                        log.info(
-                            "not_correct_day",
-                            query_date=date,
-                            acquisition_date=acquisition_date,
-                            filename=data_filename,
-                        )
-                        continue
 
-                    expected_output_h5 = target_dir / data_filename.replace(
+                    # Use acquisition date for target directory, not search date
+                    actual_target_dir = (
+                        output_base_path / f"{acquisition_date:%Y.%m.%d}"
+                    )
+                    actual_staging_dir = get_working_dir(actual_target_dir)
+
+                    expected_output_h5 = actual_target_dir / data_filename.replace(
                         ".hdf", ".h5"
                     )
                     if expected_output_h5.exists():
@@ -840,8 +838,8 @@ def download_files(
                         download_and_convert(
                             client,
                             (data_url, xml_url),
-                            staging_dir,
-                            target_dir,
+                            actual_staging_dir,
+                            actual_target_dir,
                             clean_up,
                         )
                     else:
@@ -849,8 +847,8 @@ def download_files(
                             download_and_convert,
                             client,
                             (data_url, xml_url),
-                            staging_dir,
-                            target_dir,
+                            actual_staging_dir,
+                            actual_target_dir,
                             clean_up,
                         )
                         active_task_count[0] += 1
@@ -868,6 +866,9 @@ def download_files(
                     else:
                         trimmed_tasks.append(task)
                 tasks = trimmed_tasks
+
+                # Move to next creation date
+                current_date += timedelta(days=1)
 
                 if max_downloads and count >= max_downloads:
                     break

@@ -7,6 +7,8 @@ dependencies = [
     "click>=8.2.1",
     "httpx>=0.28.1",
     "lxml>=5.4.0",
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.2",
     "pydantic>=2.11.5",
     "pyyaml>=6.0.2",
     "structlog>=25.3.0",
@@ -24,6 +26,10 @@ test = ["pytest>=8.0.0", "pytest-mock>=3.14.0", "flask>=3.0.0"]
 [project.scripts]
 fetch2-brdf = "fetch2.brdf:cli"
 
+[tool.basedpyright]
+# This is less strict than pyright's recommended
+typeCheckingMode = "strict"
+
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 python_classes = ["Test*"]
@@ -36,3 +42,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# deprecateTypingAliases = false
+# reportAny = "deprecated"
+# reportUnknownParameterType

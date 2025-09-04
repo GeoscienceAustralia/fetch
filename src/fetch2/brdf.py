@@ -19,7 +19,7 @@ from datetime import datetime as dt
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Set, Tuple, Union, Dict
+from typing import Any, Iterable, Iterator, Optional, Set, Tuple, Union, Dict
 
 import click
 import httpx
@@ -65,7 +65,7 @@ _KNOWN_PRODUCTS = {
 }
 # Tiles are (h, v) coordinates, as seen in the filename
 TILE_SETS = {
-    # The whole range of australia
+    # The whole range of Australia
     "mainland": tuple((h, v) for h in range(27, 33) for v in range(9, 14)),
     # The two offshore tiles
     "offshore": ((22, 14), (27, 14)),
@@ -223,7 +223,7 @@ class BrdfConfig(BaseModel):
 
     @field_validator("products")
     @classmethod
-    def validate_products(cls, v):
+    def validate_products(cls, v: Dict[str, ProductConfig]):
         for product_name in v.keys():
             if product_name not in _KNOWN_PRODUCTS:
                 raise ValueError(
@@ -233,7 +233,7 @@ class BrdfConfig(BaseModel):
 
     @field_validator("tiles")
     @classmethod
-    def validate_tiles(cls, v):
+    def validate_tiles(cls, v: Union[str, Path]):
         if isinstance(v, str):
             # Validate tile set names
             valid_sets = {"mainland", "offshore", "mainland+offshore"}
@@ -312,7 +312,7 @@ def resolve_tiles(tiles_config: Union[str, Path]) -> Set[str]:
 
     # Or use tile set names (concatenated by a plus)
     tile_sets = tiles_config.split("+")
-    tile_coords = set()
+    tile_coords: set[tuple[int, int]] = set()
     for tile_set in tile_sets:
         tile_set = tile_set.strip()
         if tile_set not in TILE_SETS:
@@ -322,7 +322,7 @@ def resolve_tiles(tiles_config: Union[str, Path]) -> Set[str]:
     return {f"h{h:02d}v{v:02d}" for h, v in tile_coords}
 
 
-def clean_log_values(logger, name, event_dict):
+def clean_log_values(logger, name, event_dict: dict[str, Any]):
     """Custom processor to clean up log values for better readability."""
     for key, value in event_dict.items():
         if isinstance(value, datetime.date):
@@ -418,7 +418,7 @@ def parse_acq_date(acquisition_date: str) -> date_type:
     >>> parse_acq_date('2024075')
     datetime.date(2024, 3, 15)
     >>> parse_acq_date('2025175')
-    datetime.date(2025, 6, 17)
+    datetime.date(2025, 6, 24)
     """
     return dt.strptime(acquisition_date, "%Y%j").date()
 
@@ -529,7 +529,10 @@ class BrdfClient:
                 headers["CMR-Search-After"] = search_after
 
             response = self._get_with_retries(
-                URL(self.CMR_GRANULE_URL), params=params, headers=headers
+                URL(self.CMR_GRANULE_URL),
+                params=params,
+                headers=headers,
+                search_date=date,
             )
             data = response.json()
 
@@ -579,13 +582,20 @@ class BrdfClient:
                 yield data_url, xml_url
 
     def _get_with_retries(
-        self, url: URL, params: Optional[Dict] = None, headers: Optional[Dict] = None
+        self,
+        url: URL,
+        params: Optional[Dict] = None,
+        headers: Optional[Dict] = None,
+        search_date: Optional[date_type] = None,
     ) -> httpx.Response:
         retries = 0
         delay = 5
 
         while True:
-            LOG.info("get_with_retries", url=url, retries=retries)
+            log_context = {"url": url, "retries": retries}
+            if search_date:
+                log_context["search_date"] = search_date
+            LOG.info("get_with_retries", **log_context)
             response = None
 
             try:
@@ -773,19 +783,20 @@ def download_files(
                 except Exception:
                     LOG.exception("path_error")
 
-            start_date, end_date = client.find_available_date_range()
+            # start_date, end_date = client.find_available_date_range()
+            # log.info("available_date_range", start_date=start_date, end_date=end_date)
             # Clamp the start/end dates to the available range.
             if no_older_than:
-                start_date = max(start_date, no_older_than)
+                start_date = no_older_than
             if no_newer_than:
-                end_date = min(end_date, no_newer_than)
+                end_date = no_newer_than
 
             # Search across creation date range instead of limiting to specific acquisition dates
             # This allows us to find files that were created days after acquisition
             current_date = start_date
             while current_date <= end_date:
-                log = LOG.bind(creation_date=current_date)
-                log.info("searching_by_creation_date", creation_date=current_date)
+                day_log = LOG.bind(creation_date=current_date)
+                day_log.info("searching_by_creation_date", creation_date=current_date)
 
                 for data_url, xml_url in client.find_available_remote_files(
                     current_date, tile_numbers=required_brdf_tiles
@@ -793,12 +804,14 @@ def download_files(
                     # Extract filename from URL
                     data_filename = data_url.path.split("/")[-1]
 
-                    log = log.bind(data_filename=data_filename)
+                    day_log = day_log.bind(data_filename=data_filename)
 
                     # Verify the file is actually for the date we're looking for
                     match = _BRDF_FILENAME_PATTERN.match(data_filename)
                     if not match:
-                        log.info("filename_pattern_mismatch", filename=data_filename)
+                        day_log.info(
+                            "filename_pattern_mismatch", filename=data_filename
+                        )
                         continue
 
                     # Parse acquisition date from filename for proper directory placement
@@ -814,14 +827,14 @@ def download_files(
                         ".hdf", ".h5"
                     )
                     if expected_output_h5.exists():
-                        log.debug("skip_existing", output_h5=expected_output_h5)
+                        day_log.debug("skip_existing", output_h5=expected_output_h5)
                         continue
 
                     last_queue_log = 0
                     while active_task_count[0] >= max_queue_size:
                         # Don't log more often than every 10 seconds if stuck here.
                         if time.monotonic() - last_queue_log > 10:
-                            log.debug(
+                            day_log.debug(
                                 "full_queue",
                                 active_task_count=active_task_count[0],
                                 max_queue_size=max_queue_size,
@@ -832,30 +845,22 @@ def download_files(
                             tasks, return_when="FIRST_COMPLETED", timeout=10
                         )
 
-                    # Do the first synchronously, no concurrency, to save the auth cookies first.
-                    # A slow ramp-up is fine.
-                    if count < 1:
-                        download_and_convert(
-                            client,
-                            (data_url, xml_url),
-                            actual_staging_dir,
-                            actual_target_dir,
-                            clean_up,
-                        )
-                    else:
-                        task: Future = executor.submit(
-                            download_and_convert,
-                            client,
-                            (data_url, xml_url),
-                            actual_staging_dir,
-                            actual_target_dir,
-                            clean_up,
-                        )
-                        active_task_count[0] += 1
-                        task.add_done_callback(done_one)
-                        tasks.append(task)
+                    task: Future = executor.submit(
+                        download_and_convert,
+                        client,
+                        (data_url, xml_url),
+                        actual_staging_dir,
+                        actual_target_dir,
+                        clean_up,
+                    )
+                    active_task_count[0] += 1
+                    task.add_done_callback(done_one)
+                    tasks.append(task)
                     count += 1
                     if max_downloads and count >= max_downloads:
+                        day_log.info(
+                            "hit_max_downloads_inner", max_downloads=max_downloads
+                        )
                         break
 
                 # Trim tasks if needed
@@ -871,6 +876,7 @@ def download_files(
                 current_date += timedelta(days=1)
 
                 if max_downloads and count >= max_downloads:
+                    day_log.info("hit_max_downloads", max_downloads=max_downloads)
                     break
 
             log.info("awaiting_final_tasks")

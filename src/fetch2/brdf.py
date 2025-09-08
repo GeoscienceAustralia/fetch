@@ -987,7 +987,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
             stdout=subprocess.PIPE,
         )
     except subprocess.CalledProcessError as e:
-        LOG.exception(f"error: {e.output.decode()}")
+        LOG.exception("error.swfo-convert", output=e.output.decode())
 
     expected_output_file = tmp_output / input_hdf_file.with_suffix(".h5").name
     if not expected_output_file.exists():
@@ -1099,8 +1099,8 @@ def run_with_config(config: BrdfConfig):
                 request_timeout_secs=config.download.request_timeout_secs,
                 min_request_period_secs=config.download.min_request_period_secs,
             )
-        except Exception as e:
-            log.exception("product_download_failed", product=product_name, error=str(e))
+        except Exception:
+            log.exception("product_download_failed", product=product_name)
             continue
 
     log.info("brdf_download_complete")

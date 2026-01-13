@@ -75,6 +75,53 @@ assert (27, 9) in TILE_SETS["mainland"]
 assert (32, 13) in TILE_SETS["mainland"]
 assert (32, 14) not in TILE_SETS["mainland"]
 
+USE_S3 = os.environ.get("BRDF_USE_S3", "false").lower() == "true"
+S3_BUCKET = os.environ.get("BRDF_S3_BUCKET")
+
+# Set up an S3 client
+if USE_S3:
+    import boto3
+    S3_CLIENT = boto3.client("s3")
+
+    
+def finalize_download(log: structlog.BoundLogger, src_path: Path, dest_path: Path) -> None:
+    """Moves a downloaded file from a temporary location to its final location. Will upload to s3 if configured."""
+    if USE_S3:
+        log.info(f"Uploading to {dest_path}")
+        S3_CLIENT.upload_file(
+            Filename=str(src_path),
+            Bucket=S3_BUCKET,
+            Key=str(dest_path),
+        )
+        src_path.unlink()
+    else:
+        src_path.rename(dest_path)
+
+def get_children(path: Path) -> Optional[Iterator[Path]]:
+    """List children of the given path, either locally or in S3, depending on configuration."""
+    if USE_S3:
+        LOG.debug(f"Listing S3 path {path}")
+
+        # Get a paginator for listed objects
+        paginator = S3_CLIENT.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=S3_BUCKET, Prefix=str(path))
+        first_page = True
+        for page in pages:
+            if first_page and page.get("KeyCount", 0) == 0:
+                LOG.debug(f"No S3 objects were found at {path}")
+                return None
+            first_page = False
+
+            for obj in page.get('Contents', []):
+                yield Path(obj['Key'])
+    else:
+        if path.exists() and path.is_dir():
+            for child in path.iterdir():
+                yield child
+        else:
+            return None
+
+
 
 # Configuration Models
 class DateRange(BaseModel):
@@ -354,8 +401,8 @@ def setup_logging(logging_config: LoggingConfig):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_obj = log_path.open("a")
         sys.stderr.write(f"Logging to {log_path}\n")
-    else:
-        log_obj = sys.stderr
+    # else:
+    log_obj = sys.stderr
 
     if log_obj.isatty():
         # Pretty printing when run in a terminal session.
@@ -639,6 +686,26 @@ class BrdfClient:
         )
         return response
 
+    def file_exists(self, log: structlog.BoundLogger, path: Path) -> bool:
+        """Check if the file exists either locally or in S3, depending on configuration."""
+        from botocore.exceptions import ClientError
+        if USE_S3:
+            try:
+                # TODO prefix?
+                S3_CLIENT.head_object(Bucket=S3_BUCKET, Key=str(path))
+                log.debug(f"File exists in s3 at {path}")
+                return True
+            except ClientError as e:
+                # Object does not exist.
+                if e.response['Error']['Code'] == '404':
+                    log.debug(f"File does not exist in s3 at {path}")
+                    return False
+                # For any other error (e.g., 403 Forbidden, 500 Server Error), re-raise the exception
+                else:
+                    return path.exists()
+        else:
+            return False
+
     def download_file(
         self, url: URL, output_folder: Path, filename: str
     ) -> Optional[Path]:
@@ -694,20 +761,21 @@ def find_days_with_missing_brdf_tiles(
     while date > start_date:
         date -= timedelta(days=1)
 
-        date_folder = folder / f"{date:%Y.%m.%d}"
-        if not date_folder.exists():
+        date_folder: Path = folder / f"{date:%Y.%m.%d}"
+        children = get_children(date_folder)
+
+        if not children:
             yield date, set(expected_brdf_tiles)
-            continue
 
         if not _DATE_FOLDER_PATTERN.match(date_folder.name):
             continue
-
-        if not date_folder.is_dir():
+        
+        if not USE_S3 and not date_folder.is_dir():
             continue
 
         # Check if we have all tiles for this date
         missing_tile_filenames = set(expected_brdf_tiles)
-        for file in date_folder.iterdir():
+        for file in children:
             if file.suffix == ".h5":
                 match = _BRDF_FILENAME_PATTERN.match(file.name)
                 if match:
@@ -826,7 +894,7 @@ def download_files(
                     expected_output_h5 = actual_target_dir / data_filename.replace(
                         ".hdf", ".h5"
                     )
-                    if expected_output_h5.exists():
+                    if client.file_exists(day_log, expected_output_h5):
                         day_log.debug("skip_existing", output_h5=expected_output_h5)
                         continue
 
@@ -950,8 +1018,8 @@ def download_and_convert(
         output_folder.mkdir(parents=True, exist_ok=True)
         output_hdf_path = output_folder / file_path.name
         output_xml_path = output_folder / file_xml_path.name
-        file_path.rename(output_hdf_path)
-        file_xml_path.rename(output_xml_path)
+        finalize_download(log, file_path, output_hdf_path)
+        finalize_download(log, file_xml_path, output_xml_path)
         final_path = output_hdf_path
 
     return final_path
@@ -1001,7 +1069,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     final_output_file = out_dir / expected_output_file.name
-    expected_output_file.rename(final_output_file)
+    finalize_download(log, expected_output_file, final_output_file)
 
     return final_output_file
 
@@ -1009,6 +1077,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 def load_tiles_from_file(tiles_path: Path) -> Set[str]:
     """Load and validate tile identifiers from file."""
     tiles = set()
+    # TODO I don't know how this is supposed to work
     with open(tiles_path) as f:
         for line_num, line in enumerate(f, 1):
             # Remove comments and whitespace

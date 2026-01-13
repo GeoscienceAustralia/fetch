@@ -4,6 +4,8 @@ requires = ["setuptools>=61.0"]
 
 [project]
 dependencies = [
+    # TODO move to optional
+    "boto3>=1.42.25",
     "click>=8.2.1",
     "httpx>=0.28.1",
     "lxml>=5.4.0",

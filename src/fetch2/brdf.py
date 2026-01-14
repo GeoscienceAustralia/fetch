@@ -77,43 +77,55 @@ assert (32, 14) not in TILE_SETS["mainland"]
 
 USE_S3 = os.environ.get("BRDF_USE_S3", "false").lower() == "true"
 S3_BUCKET = os.environ.get("BRDF_S3_BUCKET")
+S3_PREFIX = os.environ.get("BRDF_S3_PREFIX")
 
 # Set up an S3 client
 if USE_S3:
     import boto3
     S3_CLIENT = boto3.client("s3")
 
+def to_s3_key(base_path: Path, path: Path) -> str:
+    return str(Path(S3_PREFIX) / path.relative_to(base_path))
+def to_file_path(base_path: Path, s3_key: str) -> Path:
+    return base_path / s3_key.relative_to(S3_PREFIX)
     
-def finalize_download(log: structlog.BoundLogger, src_path: Path, dest_path: Path) -> None:
+def finalize_download(log: structlog.BoundLogger, base_path: Path, src_path: Path, dest_path: Path) -> None:
     """Moves a downloaded file from a temporary location to its final location. Will upload to s3 if configured."""
+    
+    # Destination should strip the file prefix and add the S3 prefix
+    
     if USE_S3:
-        log.info(f"Uploading to {dest_path}")
+        dest_key = to_s3_key(base_path, dest_path)
+        log.info(f"Uploading to {dest_key}")
         S3_CLIENT.upload_file(
             Filename=str(src_path),
             Bucket=S3_BUCKET,
-            Key=str(dest_path),
+            Key=dest_key,
         )
         src_path.unlink()
     else:
         src_path.rename(dest_path)
 
-def get_children(path: Path) -> Optional[Iterator[Path]]:
+def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
     """List children of the given path, either locally or in S3, depending on configuration."""
     if USE_S3:
-        LOG.debug(f"Listing S3 path {path}")
+        
+        # Fix the path prefix
+        s3_path = to_s3_key(base_path, path) 
+        LOG.debug(f"Listing S3 path {s3_path}")
 
         # Get a paginator for listed objects
         paginator = S3_CLIENT.get_paginator('list_objects_v2')
-        pages = paginator.paginate(Bucket=S3_BUCKET, Prefix=str(path))
+        pages = paginator.paginate(Bucket=S3_BUCKET, Prefix=s3_path)
         first_page = True
         for page in pages:
             if first_page and page.get("KeyCount", 0) == 0:
-                LOG.debug(f"No S3 objects were found at {path}")
+                LOG.debug(f"No S3 objects were found at {s3_path}")
                 return None
             first_page = False
 
             for obj in page.get('Contents', []):
-                yield Path(obj['Key'])
+                yield to_file_path(base_path, obj['Key'])
     else:
         if path.exists() and path.is_dir():
             for child in path.iterdir():
@@ -121,7 +133,25 @@ def get_children(path: Path) -> Optional[Iterator[Path]]:
         else:
             return None
 
-
+def file_exists(log: structlog.BoundLogger, base_path: Path, path: Path) -> bool:
+    """Check if the file exists either locally or in S3, depending on configuration."""
+    from botocore.exceptions import ClientError
+    if USE_S3:
+        try:
+            s3_key = to_s3_key(base_path, path)
+            S3_CLIENT.head_object(Bucket=S3_BUCKET, Key=s3_key)
+            log.debug(f"File exists in s3 at {s3_key}")
+            return True
+        except ClientError as e:
+            # Object does not exist.
+            if e.response['Error']['Code'] == '404':
+                log.debug(f"File does not exist in s3 at {s3_key}")
+                return False
+            # For any other error (e.g., 403 Forbidden, 500 Server Error), re-raise the exception
+            else:
+                return path.exists()
+    else:
+        return False
 
 # Configuration Models
 class DateRange(BaseModel):
@@ -401,8 +431,8 @@ def setup_logging(logging_config: LoggingConfig):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_obj = log_path.open("a")
         sys.stderr.write(f"Logging to {log_path}\n")
-    else:
-        log_obj = sys.stderr
+    # else:
+    log_obj = sys.stderr
 
     if log_obj.isatty():
         # Pretty printing when run in a terminal session.
@@ -686,26 +716,6 @@ class BrdfClient:
         )
         return response
 
-    def file_exists(self, log: structlog.BoundLogger, path: Path) -> bool:
-        """Check if the file exists either locally or in S3, depending on configuration."""
-        from botocore.exceptions import ClientError
-        if USE_S3:
-            try:
-                # TODO prefix?
-                S3_CLIENT.head_object(Bucket=S3_BUCKET, Key=str(path))
-                log.debug(f"File exists in s3 at {path}")
-                return True
-            except ClientError as e:
-                # Object does not exist.
-                if e.response['Error']['Code'] == '404':
-                    log.debug(f"File does not exist in s3 at {path}")
-                    return False
-                # For any other error (e.g., 403 Forbidden, 500 Server Error), re-raise the exception
-                else:
-                    return path.exists()
-        else:
-            return False
-
     def download_file(
         self, url: URL, output_folder: Path, filename: str
     ) -> Optional[Path]:
@@ -746,6 +756,7 @@ class BrdfClient:
 
 
 def find_days_with_missing_brdf_tiles(
+    base_output_dir: Path,
     folder: Path,
     expected_brdf_tiles: Iterable[str],
     start_date: Optional[date_type],
@@ -762,7 +773,7 @@ def find_days_with_missing_brdf_tiles(
         date -= timedelta(days=1)
 
         date_folder: Path = folder / f"{date:%Y.%m.%d}"
-        children = get_children(date_folder)
+        children = get_children(base_output_dir, date_folder)
 
         if not children:
             yield date, set(expected_brdf_tiles)
@@ -827,6 +838,7 @@ def download_files(
     product_config = _KNOWN_PRODUCTS[product]
     collection_concept_id = product_config["concept_id"]
     output_offset = product_config["output_path"]
+    base_output_dir = output_base_path
     output_base_path = output_base_path / output_offset
 
     with BrdfClient(
@@ -894,7 +906,7 @@ def download_files(
                     expected_output_h5 = actual_target_dir / data_filename.replace(
                         ".hdf", ".h5"
                     )
-                    if client.file_exists(day_log, expected_output_h5):
+                    if file_exists(day_log, base_output_dir, expected_output_h5):
                         day_log.debug("skip_existing", output_h5=expected_output_h5)
                         continue
 
@@ -915,6 +927,7 @@ def download_files(
 
                     task: Future = executor.submit(
                         download_and_convert,
+                        base_output_dir,
                         client,
                         (data_url, xml_url),
                         actual_staging_dir,
@@ -966,6 +979,7 @@ def url_filename(url: URL) -> str:
 
 
 def download_and_convert(
+    base_output_dir: Path,
     client: BrdfClient,
     url_set: Tuple[URL, URL],
     staging_folder: Path,
@@ -1008,7 +1022,7 @@ def download_and_convert(
 
     if do_convert:
         log.info("converting", hdf_path=file_path, hdf_xml_path=file_xml_path)
-        final_path = convert_to_h5(file_path, output_folder, log=log)
+        final_path = convert_to_h5(base_output_dir, file_path, output_folder, log=log)
         log.info("converted", output_h5_path=final_path)
         if clean_up:
             file_path.unlink()
@@ -1018,14 +1032,14 @@ def download_and_convert(
         output_folder.mkdir(parents=True, exist_ok=True)
         output_hdf_path = output_folder / file_path.name
         output_xml_path = output_folder / file_xml_path.name
-        finalize_download(log, file_path, output_hdf_path)
-        finalize_download(log, file_xml_path, output_xml_path)
+        finalize_download(log, base_output_dir, file_path, output_hdf_path)
+        finalize_download(log, base_output_dir, file_xml_path, output_xml_path)
         final_path = output_hdf_path
 
     return final_path
 
 
-def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
+def convert_to_h5(base_output_dir: Path, input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
     expected_hdf_xml_path = input_hdf_file.with_name(f"{input_hdf_file.name}.xml")
     if not expected_hdf_xml_path.exists():
         raise ValueError(
@@ -1069,7 +1083,7 @@ def convert_to_h5(input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     final_output_file = out_dir / expected_output_file.name
-    finalize_download(log, expected_output_file, final_output_file)
+    finalize_download(log, base_output_dir, expected_output_file, final_output_file)
 
     return final_output_file
 

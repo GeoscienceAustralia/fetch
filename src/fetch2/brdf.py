@@ -401,8 +401,8 @@ def setup_logging(logging_config: LoggingConfig):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_obj = log_path.open("a")
         sys.stderr.write(f"Logging to {log_path}\n")
-    # else:
-    log_obj = sys.stderr
+    else:
+        log_obj = sys.stderr
 
     if log_obj.isatty():
         # Pretty printing when run in a terminal session.

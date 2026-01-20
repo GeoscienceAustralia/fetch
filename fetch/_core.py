@@ -622,8 +622,7 @@ class ShellFileProcessor(FileProcessor):
             raise FileProcessError('Return code %r from command %r' % (returned, command))
 
         # Check that output exists
-        # TODO expect_file = self.upload_dir + '/{file_stem}.h5'
-        expect_file = self.upload_dir + '/{filename}'
+        expect_file = self.upload_dir + '/{file_stem}.h5'
         expected_path = self._apply_file_pattern(expect_file, file_path, **required_files_formating)
 
         if not os.path.exists(expected_path):

@@ -14,6 +14,7 @@ import smtplib
 import socket
 import subprocess
 import tempfile
+import boto3
 from email.mime.text import MIMEText
 from email.header import Header
 
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Callable
 
 from .util import rsync, Uri
+from . import s3
 
 _log = logging.getLogger(__name__)
 
@@ -560,11 +562,12 @@ class ShellFileProcessor(FileProcessor):
     :type command: str
     """
 
-    def __init__(self, command=None, expect_file=None, input_files=None):
+    def __init__(self, command=None, upload_dir=None, bucket=None, prefix=None):
         super(ShellFileProcessor, self).__init__()
         self.command = command
-        self.expect_file = expect_file
-        self.input_files = input_files
+        self.upload_dir = upload_dir
+        self.bucket = bucket
+        self.prefix = prefix
 
     def _apply_file_pattern(self, pattern, file_path, **keywords):
         """
@@ -609,20 +612,7 @@ class ShellFileProcessor(FileProcessor):
         :raises: FileProcessError
         """
         command = self.command
-        if self.input_files:
-            path_transform = RegexpOutputPathTransform(self.input_files[0])
-            if not all([os.path.isfile(path_transform.transform_output_path(f, file_path))
-                        for f in self.input_files[1]]):
-                _log.info('Not all of the required_files are present.')
-                # This is used for reporting, so it is returning the file_path.
-                return file_path
-            else:
-                # format the path based on the group from
-                # transform output path
-                # command = path_transform.transform_output_path(command)
-                required_files_formating = path_transform.last_matched_groups
-        else:
-            required_files_formating = {}
+        required_files_formating = {}
         command = self._apply_file_pattern(command, file_path, **required_files_formating)
         _log.info('Running %r', command)
 
@@ -632,10 +622,15 @@ class ShellFileProcessor(FileProcessor):
             raise FileProcessError('Return code %r from command %r' % (returned, command))
 
         # Check that output exists
-        expected_path = self._apply_file_pattern(self.expect_file, file_path, **required_files_formating)
+        # TODO expect_file = self.upload_dir + '/{file_stem}.h5'
+        expect_file = self.upload_dir + '/{filename}'
+        expected_path = self._apply_file_pattern(expect_file, file_path, **required_files_formating)
 
         if not os.path.exists(expected_path):
             raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))
 
+        s3.upload(expected_path, self.bucket, self.prefix)
+
         _log.debug('File available %r', expected_path)
+
         return expected_path

@@ -190,7 +190,9 @@ rules:
     # Convert files to tiff (from netCDF)
     process: !shell
       command: '/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{filename} {parent_dir}/{file_stem}.tif'
-      expect_file: '{parent_dir}/{file_stem}.tif'
+      upload_dir: '/data/water_vapour'
+      bucket: 'ard-processing-data'
+      prefix: 'ancillary/water_vapour'
 #
 #-------------------------------
 # Examples using the ECMWF API |

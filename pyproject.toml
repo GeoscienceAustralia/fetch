@@ -25,6 +25,10 @@ dependencies = [
     "pyyaml",
     "requests>=2.21.0",
     "boto3",
+    "pytest",
+    "mock",
+    "pylint",
+    "pep8",
     "setproctitle; sys_platform == 'linux'",
 ]
 

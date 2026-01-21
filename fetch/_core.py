@@ -562,21 +562,21 @@ class ShellFileProcessor(FileProcessor):
     :type command: str
     """
 
-    def __init__(self, command=None, upload_dir=None, bucket=None, prefix=None):
+    def __init__(self, command, upload_dir, bucket, prefix):
         super(ShellFileProcessor, self).__init__()
         self.command = command
         self.upload_dir = upload_dir
         self.bucket = bucket
         self.prefix = prefix
 
-    def _apply_file_pattern(self, pattern, file_path, **keywords):
+    def _apply_file_pattern(self, pattern, file_path):
         """
         Format the given pattern.
         :type file_path: str
 
         :rtype: str
 
-        >>> p = ShellFileProcessor()
+        >>> p = ShellFileProcessor('run command on file {filename}', '/data/upload', 's3-bucket', 's3-prefix')
         >>> p._apply_file_pattern('{file_stem} extension {file_suffix}', '/tmp/something.txt')
         'something extension .txt'
         >>> p._apply_file_pattern('{filename} in {parent_dir}', '/tmp/something.txt')
@@ -585,8 +585,7 @@ class ShellFileProcessor(FileProcessor):
         '/tmp'
         >>> p._apply_file_pattern('{parent_dirs[1]}', '/tmp/something.txt')
         '/'
-        >>> p._apply_file_pattern('{base}.hdf', '/tmp/something.hdf',**{'base':'/tmp/something'})
-        '/tmp/something.hdf'
+
         """
         path = Path(file_path)
         return pattern.format(
@@ -601,8 +600,7 @@ class ShellFileProcessor(FileProcessor):
             parent_dirs=[str(p) for p in path.parents],
 
             # A more flexible alternative to the above.
-            path=path,
-            **keywords
+            path=path
         )
 
     def process(self, file_path):
@@ -612,8 +610,7 @@ class ShellFileProcessor(FileProcessor):
         :raises: FileProcessError
         """
         command = self.command
-        required_files_formating = {}
-        command = self._apply_file_pattern(command, file_path, **required_files_formating)
+        command = self._apply_file_pattern(command, file_path)
         _log.info('Running %r', command)
 
         # Trigger command
@@ -623,7 +620,7 @@ class ShellFileProcessor(FileProcessor):
 
         # Check that output exists
         expect_file = self.upload_dir + '/{file_stem}.h5'
-        expected_path = self._apply_file_pattern(expect_file, file_path, **required_files_formating)
+        expected_path = self._apply_file_pattern(expect_file, file_path)
 
         if not os.path.exists(expected_path):
             raise FileProcessError('Expected output not found {!r} for command {!r}'.format(expected_path, command))

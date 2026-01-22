@@ -12,7 +12,6 @@ class TestAuto(unittest.TestCase):
                 self.exitcode = exitcode
                 self.name = name
                 self.pid = pid
-                self.log_file = '/tmp/test.log'
 
         running_proc = MockProcess(exitcode=None)
         failed_proc = MockProcess(exitcode=1)

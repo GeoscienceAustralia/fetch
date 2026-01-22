@@ -8,8 +8,6 @@ from pathlib import Path
 
 from fetch import load
 
-with_neocommon = pytest.mark.with_neocommon
-
 
 def _fail_with_diff(reparsed_config, source_config):
     print('-' * 20)
@@ -42,20 +40,6 @@ def _check_load_dump_config(make_config):
 
 def test_dump_load_obj_full():
     _check_load_dump_config(_make_config)
-
-
-@with_neocommon
-def test_dump_load_obj_with_messaging():
-    def make_config_no_messaging():
-        c = _make_config()
-        c['messaging'] = {
-            'host': 'rhe-pma-test08.test.lan',
-            'username': 'fetch',
-            'password': 'fetch'
-        }
-        return c
-
-    _check_load_dump_config(make_config_no_messaging)
 
 
 def print_simple_obj_diff(dict1, dict2):

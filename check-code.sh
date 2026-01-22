@@ -13,5 +13,4 @@ pylint --py3k --reports no ${py_files}
 pep8 ${py_files} --max-line-length 120
 
 # Run tests
-# -> But not those that require the neocommon library.
-py.test fetch test -m 'not with_neocommon'
+py.test fetch test

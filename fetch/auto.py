@@ -314,8 +314,6 @@ class RunConfig(object):
         self.lock_directory = None
         #: :type: list of fetch.TaskFailureListener
         self.notifiers = []
-        #: :type: dict of (str, str)
-        self.messaging_settings = None
         # Key-values are log names and levels.
         #: :type: dict of (str, str)
         self.log_levels = None
@@ -328,9 +326,6 @@ class RunConfig(object):
 
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
-        self.messaging_settings = config.messaging_settings
-
-        _log.info('%s messaging configuration.', 'Loaded' if config.messaging_settings else 'No')
 
         if not os.path.exists(self.base_directory):
             raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
@@ -360,33 +355,6 @@ class NotifyResultHandler(ResultHandler):
         self.config = config
         self.job_id = job_id
 
-    def _announce_files_complete(self, source_uri, paths, msg_metadata=None):
-        """
-        Announce on the message bus that files are complete.
-
-        No-op if there is no messaging configuration.
-        :type source_uri: str
-        :type paths: list of str
-        """
-        md = msg_metadata or {}
-        md.update({
-            'source-uri': source_uri
-        })
-
-        _log.info('Completed %r -> %r', source_uri, paths)
-        if self.config.messaging_settings:
-            # Optional library.
-            #: pylint: disable=import-error
-            from neocommon import message, Uri as NeoUri
-            uris = [NeoUri.parse(path) for path in paths]
-            with message.NeoMessenger(message.MessengerConnection(**self.config.messaging_settings)) as msg:
-                msg.announce_ancillary(
-                    message.AncillaryUpdate(
-                        ancillary_type=self.job_id,
-                        uris=uris,
-                        properties=md
-                    )
-                )
 
     def files_complete(self, source_uri, paths, msg_metadata=None):
         """
@@ -398,7 +366,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :return:
         """
-        self._announce_files_complete(source_uri, paths, msg_metadata=msg_metadata)
+        _log.info('Completed %r -> %r', source_uri, paths)
 
     def file_complete(self, source_uri, path, msg_metadata=None):
         """
@@ -407,7 +375,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :type path: str
         """
-        self._announce_files_complete(source_uri, [path], msg_metadata=msg_metadata)
+        _log.info('Completed %r -> %r', source_uri, path)
 
     def file_error(self, uri, summary, body):
         """

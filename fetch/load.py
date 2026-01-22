@@ -136,7 +136,7 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, rules, messaging_settings=None, log_levels=None):
+    def __init__(self, directory, rules, log_levels=None):
         """
         :type directory: str
         :type rules: list of ScheduledItem
@@ -149,13 +149,6 @@ class Config(object):
         # Empty list of rules is ok: they may be added after startup (a config reload/SIGHUP).
         self.rules = rules
 
-        if messaging_settings:
-            # Optional library.
-            #: pylint: disable=import-error
-            from neocommon.message import MessengerConnection
-            verify_can_construct(MessengerConnection, messaging_settings, identifier='messaging settings')
-
-        self.messaging_settings = messaging_settings
         self.log_levels = log_levels
 
     @classmethod
@@ -168,7 +161,6 @@ class Config(object):
         """
 
         directory = config.get('directory')
-        messaging_settings = config.get('messaging')
         log_levels = config.get('log')
 
         rules = []
@@ -181,7 +173,6 @@ class Config(object):
         return Config(
             directory,
             rules,
-            messaging_settings=messaging_settings,
             log_levels=log_levels
         )
 
@@ -193,7 +184,6 @@ class Config(object):
         return remove_nones({
             'directory': self.directory,
             'log': self.log_levels,
-            'messaging': self.messaging_settings,
             'rules': dict([
                 (
                     r.name, remove_nones({

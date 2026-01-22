@@ -7,18 +7,9 @@
 # The work directory (for log and lock files):
 directory: /data/fetch
 
-# Message bus config, for announcing arrivals. Optional.
-messaging:
-  host: rhe-neo-dev01.dev.lan
-  # virtual_host:
-  username: fetch
-  password: fetch
-
 # Logging level for modules (any python module can be added here)
 log:
   fetch: DEBUG
-  neocommon: DEBUG
-  neocommon.files: INFO
 
 # Download rules:
 rules:

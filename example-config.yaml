@@ -7,10 +7,6 @@
 # The work directory (for log and lock files):
 directory: /data/fetch
 
-# Notification settings (for errors):
-notify:
-  email: ['jeremy.hooke@ga.gov.au']
-
 # Message bus config, for announcing arrivals. Optional.
 messaging:
   host: rhe-neo-dev01.dev.lan

@@ -116,9 +116,6 @@ def _make_config():
     anc_data = '/tmp/anc'
     schedule = {
         'directory': '/tmp/anc-fetch',
-        'notify': {
-            'email': ['jeremy.hooke@ga.gov.au']
-        },
         'log': {
             'fetch': 'DEBUG'
         },

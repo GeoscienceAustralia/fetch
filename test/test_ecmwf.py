@@ -134,9 +134,6 @@ def _make_ecmwf_config(ancillary_data_root='/tmp/anc'):
     """
     schedule = {
         'directory': '/tmp/anc-fetch',
-        'notify': {
-            'email': ['test@ga.gov.au']
-        },
         'log': {
             'fetch': 'DEBUG'
         },

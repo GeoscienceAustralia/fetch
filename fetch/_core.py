@@ -7,16 +7,10 @@ from __future__ import absolute_import
 import datetime
 import errno
 import logging
-import multiprocessing
 import os
 import re
-import smtplib
-import socket
 import subprocess
 import tempfile
-import boto3
-from email.mime.text import MIMEText
-from email.header import Header
 
 from pathlib import Path
 from typing import Callable
@@ -470,76 +464,6 @@ class TaskFailureListener(object):
         pass
 
 
-class TaskFailureEmailer(TaskFailureListener):
-    """
-    Send failure information via email
-    """
-
-    def __init__(self, addresses):
-        """
-        :type addresses: list of str
-        """
-        self.addresses = addresses
-
-    def on_file_failure(self, process_name, file_uri, summary, body_text):
-        """
-        Send mail on a
-        :param process_name:
-        :param file_uri:
-        :param summary:
-        :param body_text:
-        :return:
-        """
-        self._send_mail(
-            u'uri: {uri}\n{summary}\n\n{body}'.format(
-                uri=file_uri,
-                summary=summary,
-                body=body_text
-            ),
-            process_name
-        )
-
-    def on_process_failure(self, process):
-        """
-        :type process: ScheduledProcess
-        """
-
-        # A negative exit code means it was killed via a signal. Probably by the user.
-        # Not worth emailing.
-        if process.exitcode < 0:
-            return
-
-        with open(process.log_file, 'rt') as f:
-            msg = f.read()
-
-        self._send_mail(msg, process.name)
-
-    def _send_mail(self, body_text, process_name):
-        """
-        :type body_text: str
-        :type process_name: str
-        """
-        hostname = socket.getfqdn()
-        msg = MIMEText(body_text.encode('utf-8'), 'plain', 'utf-8')
-        msg['Subject'] = Header(u'{name} failure on {hostname}'.format(
-            name=process_name,
-            hostname=hostname
-        ).encode('utf-8'), 'utf-8')
-        from_address = 'fetch-{pid}@{hostname}'.format(
-            pid=multiprocessing.current_process().pid,
-            hostname=hostname
-        )
-        msg['from'] = from_address
-        msg['to'] = ", ".join(self.addresses)
-        s = smtplib.SMTP('localhost')
-        s.sendmail(
-            from_address,
-            self.addresses,
-            msg.as_string()
-        )
-        s.quit()
-
-
 class FileProcessor(SimpleObject):
     """
     Any action that will process a file after retrieval. (base class)
@@ -619,7 +543,7 @@ class ShellFileProcessor(FileProcessor):
             raise FileProcessError('Return code %r from command %r' % (returned, command))
 
         # Check that output exists
-        expect_file = self.upload_dir + '/{file_stem}.h5'
+        expect_file = self.upload_dir + '/{filename}'
         expected_path = self._apply_file_pattern(expect_file, file_path)
 
         if not os.path.exists(expected_path):

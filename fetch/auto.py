@@ -25,7 +25,7 @@ import arrow
 from croniter import croniter
 
 from . import load
-from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
+from ._core import ResultHandler, RemoteFetchException, mkdirs
 
 # setproctitle is only supported on some platforms (Linux).
 try:
@@ -59,21 +59,6 @@ def _attempt_lock(lock_file):
         return False
 
     return True
-
-
-def _redirect_output(log_file):
-    """
-    Redirect all output to the given file.
-
-    :type log_file: str
-    """
-    output = open(log_file, 'w')
-    sys.stdout = output
-    sys.stderr = output
-    logging_clear()
-    handler = logging.StreamHandler(stream=output)
-    handler.setFormatter(_LOG_FORMATTER)
-    logging.getLogger().addHandler(handler)
 
 
 def _run_item(reporter, item, scheduled_time, log_directory, lock_directory):
@@ -143,7 +128,6 @@ class ScheduledProcess(multiprocessing.Process):
         Configure the environment and run our module.
         """
         _init_signals()
-        _redirect_output(self.log_file)
 
         if not _attempt_lock(self.lock_file):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
@@ -235,7 +219,7 @@ def _on_child_finish(child, notifiers):
 
     if exit_code != 0:
         _log.error(
-            'Error return code %s from %r. Output logged to %r',
+            'Error return code %s from %r.',
             exit_code, child.name, child.log_file
         )
 
@@ -270,16 +254,6 @@ def get_day_log_dir(log_directory, time_secs):
     :type time_secs: float
     :rtype: str
 
-    >>> get_day_log_dir('/tmp/day-dir-test', 1416285412.541422)
-    '/tmp/day-dir-test/2014/11-18'
-    """
-    # We use localtime because the cron scheduling uses localtime.
-    t = time.localtime(time_secs)
-
-    day_log_dir = os.path.join(
-        log_directory,
-        time.strftime('%Y', t),
-        time.strftime('%m-%d', t)
     )
     if not os.path.exists(day_log_dir):
         mkdirs(day_log_dir)
@@ -382,11 +356,6 @@ class RunConfig(object):
         self.messaging_settings = config.messaging_settings
 
         _log.info('%s messaging configuration.', 'Loaded' if config.messaging_settings else 'No')
-
-        self.notifiers = []
-        if config.notify_addresses:
-            self.notifiers.append(TaskFailureEmailer(config.notify_addresses))
-        _log.info('%s addresses for error notification: %s', len(config.notify_addresses), config.notify_addresses)
 
         if not os.path.exists(self.base_directory):
             raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
@@ -662,6 +631,6 @@ def _set_logging_levels(levels):
         _log.info('Set log level %s to %s', name, level)
 
 
-_LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
+_LOG_HANDLER = logging.StreamHandler(sys.stdout)
 _LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _LOG_HANDLER.setFormatter(_LOG_FORMATTER)

@@ -541,6 +541,8 @@ class ShellFileProcessor(FileProcessor):
         returned = subprocess.call(command, shell=True)
         if returned != 0:
             raise FileProcessError('Return code %r from command %r' % (returned, command))
+        else:
+            _log.debug("Command completed successfully.")
 
         # Check that output exists
         expect_file = self.upload_dir + '/{file_stem}.h5'

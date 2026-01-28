@@ -30,11 +30,11 @@ def upload(filepath: str, bucket: str, prefix: str):
     s3_key = f"{prefix}/{filename}"
 
     try:
-        message  = f"Uploading {filename} to s3://{bucket}/{s3_key}"
+        message = f"Uploading {filename} to s3://{bucket}/{s3_key}"
         _log.debug(message)
         _s3.upload_file(filepath, bucket, s3_key)
     except Exception as e:
-        message = f"Failed to upload {filename} to s3://{bucket}/{s3_key}";
+        message = f"Failed to upload {filename} to s3://{bucket}/{s3_key}"
         raise FileUploadError(message) from e
 
     message = f"Successfully Uploaded {filename} to s3://{bucket}/{s3_key}"

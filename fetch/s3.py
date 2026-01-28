@@ -19,7 +19,8 @@ def upload(filepath: str, bucket: str, prefix: str):
 
     :raises: FileUploadError
     """
-    _log.info(f"Uploading file {filepath} to s3://{bucket}/{prefix}")
+    message = f"Uploading file {filepath} to s3://{bucket}/{prefix}"
+    _log.info(message)
 
     if not os.path.exists(filepath):
         raise FileUploadError(f"File does not exist: {filepath}")
@@ -29,9 +30,12 @@ def upload(filepath: str, bucket: str, prefix: str):
     s3_key = f"{prefix}/{filename}"
 
     try:
-        _log.debug(f"Uploading {filename} to s3://{bucket}/{s3_key}")
+        message  = f"Uploading {filename} to s3://{bucket}/{s3_key}"
+        _log.debug(message)
         _s3.upload_file(filepath, bucket, s3_key)
     except Exception as e:
-        raise FileUploadError(f"Failed to upload {filename} to s3://{bucket}/{s3_key}") from e
+        message = f"Failed to upload {filename} to s3://{bucket}/{s3_key}";
+        raise FileUploadError(message) from e
 
-    _log.info(f"Successfully Uploaded {filename} to s3://{bucket}/{s3_key}")
+    message = f"Successfully Uploaded {filename} to s3://{bucket}/{s3_key}"
+    _log.info(message)

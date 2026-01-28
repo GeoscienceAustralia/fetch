@@ -7,22 +7,9 @@
 # The work directory (for log and lock files):
 directory: /data/fetch
 
-# Notification settings (for errors):
-notify:
-  email: ['jeremy.hooke@ga.gov.au']
-
-# Message bus config, for announcing arrivals. Optional.
-messaging:
-  host: rhe-neo-dev01.dev.lan
-  # virtual_host:
-  username: fetch
-  password: fetch
-
 # Logging level for modules (any python module can be added here)
 log:
   fetch: DEBUG
-  neocommon: DEBUG
-  neocommon.files: INFO
 
 # Download rules:
 rules:
@@ -190,7 +177,9 @@ rules:
     # Convert files to tiff (from netCDF)
     process: !shell
       command: '/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" {parent_dir}/{filename} {parent_dir}/{file_stem}.tif'
-      expect_file: '{parent_dir}/{file_stem}.tif'
+      upload_dir: '/data/water_vapour'
+      bucket: 'ard-processing-data'
+      prefix: 'ancillary/water_vapour'
 #
 #-------------------------------
 # Examples using the ECMWF API |

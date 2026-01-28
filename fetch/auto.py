@@ -25,7 +25,7 @@ import arrow
 from croniter import croniter
 
 from . import load
-from ._core import ResultHandler, TaskFailureEmailer, RemoteFetchException, mkdirs
+from ._core import ResultHandler, RemoteFetchException, mkdirs
 
 # setproctitle is only supported on some platforms (Linux).
 try:
@@ -61,22 +61,7 @@ def _attempt_lock(lock_file):
     return True
 
 
-def _redirect_output(log_file):
-    """
-    Redirect all output to the given file.
-
-    :type log_file: str
-    """
-    output = open(log_file, 'w')
-    sys.stdout = output
-    sys.stderr = output
-    logging_clear()
-    handler = logging.StreamHandler(stream=output)
-    handler.setFormatter(_LOG_FORMATTER)
-    logging.getLogger().addHandler(handler)
-
-
-def _run_item(reporter, item, scheduled_time, log_directory, lock_directory):
+def _run_item(reporter, item, scheduled_time, lock_directory):
     """
     Run the given module in a subprocess
     :type reporter: ResultHandler
@@ -84,11 +69,11 @@ def _run_item(reporter, item, scheduled_time, log_directory, lock_directory):
     :rtype: ScheduledProcess
     """
     p = ScheduledProcess(
-        reporter, item, scheduled_time, log_directory, lock_directory
+        reporter, item, scheduled_time, lock_directory
     )
 
     _log.debug('Module info %r', item.module)
-    _log.info('Starting %r. Log %r, Lock %r', p.name, p.log_file, p.lock_file)
+    _log.info('Starting %r. Lock %r', p.name, p.lock_file)
     p.start()
     return p
 
@@ -98,22 +83,21 @@ class ScheduledProcess(multiprocessing.Process):
     A subprocess to run a module.
     """
 
-    def __init__(self, reporter, item, scheduled_time, log_directory, lock_directory, epoch_to_time=time.localtime):
+    def __init__(self, reporter, item, scheduled_time, lock_directory, epoch_to_time=time.localtime):
         """
         :type reporter: fetch.ResultHandler
         :type item: fetch.load.ScheduledItem
         :type scheduled_time: float
-        :type log_directory: str
         :type lock_directory: str
 
         >>> from ._core import EmptySource
         >>> item = load.ScheduledItem('LS7 CPF', '* * * * *', EmptySource())
         >>> # 04:36 UTC time
         >>> scheduled_time = 1416285412.541422
-        >>> log, lock = '/tmp/test-log', '/tmp/test-lock'
-        >>> s = ScheduledProcess(None, item, scheduled_time, log, lock, epoch_to_time=time.gmtime)
-        >>> (s.name, s.log_file, s.lock_file)
-        ('fetch-0436-ls7-cpf', '/tmp/test-log/0436-ls7-cpf.log', '/tmp/test-lock/ls7-cpf.lck')
+        >>> lock = '/tmp/test-lock'
+        >>> s = ScheduledProcess(None, item, scheduled_time, lock, epoch_to_time=time.gmtime)
+        >>> (s.name, s.lock_file)
+        ('fetch-0436-ls7-cpf', '/tmp/test-lock/ls7-cpf.lck')
         """
         super(ScheduledProcess, self).__init__()
         id_ = item.sanitized_name
@@ -122,15 +106,7 @@ class ScheduledProcess(multiprocessing.Process):
             '{id}.lck'.format(id=id_)
         )
         scheduled_time_st = time.strftime('%H%M', epoch_to_time(scheduled_time))
-        log_file = os.path.join(
-            log_directory,
-            '{time}-{id}.log'.format(
-                id=id_,
-                time=scheduled_time_st
-            )
-        )
 
-        self.log_file = log_file
         self.lock_file = lock_file
         self.name = 'fetch-{}-{}'.format(scheduled_time_st, id_)
         self.scheduled_time = scheduled_time
@@ -143,7 +119,6 @@ class ScheduledProcess(multiprocessing.Process):
         Configure the environment and run our module.
         """
         _init_signals()
-        _redirect_output(self.log_file)
 
         if not _attempt_lock(self.lock_file):
             _log.debug('Lock is activated. Skipping run. %r', self.name)
@@ -235,8 +210,8 @@ def _on_child_finish(child, notifiers):
 
     if exit_code != 0:
         _log.error(
-            'Error return code %s from %r. Output logged to %r',
-            exit_code, child.name, child.log_file
+            'Error return code %s from %r.',
+            exit_code, child.name,
         )
 
         for n in notifiers:
@@ -261,30 +236,6 @@ def _filter_finished_children(running_children, notifiers):
         _on_child_finish(child, notifiers)
 
     return still_running
-
-
-def get_day_log_dir(log_directory, time_secs):
-    """
-    Get log directory for this day.
-    :type log_directory: str
-    :type time_secs: float
-    :rtype: str
-
-    >>> get_day_log_dir('/tmp/day-dir-test', 1416285412.541422)
-    '/tmp/day-dir-test/2014/11-18'
-    """
-    # We use localtime because the cron scheduling uses localtime.
-    t = time.localtime(time_secs)
-
-    day_log_dir = os.path.join(
-        log_directory,
-        time.strftime('%Y', t),
-        time.strftime('%m-%d', t)
-    )
-    if not os.path.exists(day_log_dir):
-        mkdirs(day_log_dir)
-
-    return day_log_dir
 
 
 def _on_shutdown(running_children, notifiers):
@@ -359,14 +310,10 @@ class RunConfig(object):
         self.schedule = None
         # : type: str
         self.base_directory = None
-        # : type: str
-        self.log_directory = None
         #: type: str
         self.lock_directory = None
         #: :type: list of fetch.TaskFailureListener
         self.notifiers = []
-        #: :type: dict of (str, str)
-        self.messaging_settings = None
         # Key-values are log names and levels.
         #: :type: dict of (str, str)
         self.log_levels = None
@@ -379,14 +326,6 @@ class RunConfig(object):
 
         self.schedule = Schedule(config.rules)
         self.base_directory = config.directory
-        self.messaging_settings = config.messaging_settings
-
-        _log.info('%s messaging configuration.', 'Loaded' if config.messaging_settings else 'No')
-
-        self.notifiers = []
-        if config.notify_addresses:
-            self.notifiers.append(TaskFailureEmailer(config.notify_addresses))
-        _log.info('%s addresses for error notification: %s', len(config.notify_addresses), config.notify_addresses)
 
         if not os.path.exists(self.base_directory):
             raise ValueError('Configured base folder does not exist: %r' % self.base_directory)
@@ -397,11 +336,6 @@ class RunConfig(object):
             _log.info('Using lock directory %s', self.lock_directory)
             if not os.path.exists(self.lock_directory):
                 mkdirs(self.lock_directory)
-
-        self.log_directory = os.path.join(self.base_directory, 'log')
-        _log.info('Using log directory %s', self.log_directory)
-        if not os.path.exists(self.log_directory):
-            mkdirs(self.log_directory)
 
         if config.log_levels != self.log_levels:
             _set_logging_levels(config.log_levels)
@@ -421,34 +355,6 @@ class NotifyResultHandler(ResultHandler):
         self.config = config
         self.job_id = job_id
 
-    def _announce_files_complete(self, source_uri, paths, msg_metadata=None):
-        """
-        Announce on the message bus that files are complete.
-
-        No-op if there is no messaging configuration.
-        :type source_uri: str
-        :type paths: list of str
-        """
-        md = msg_metadata or {}
-        md.update({
-            'source-uri': source_uri
-        })
-
-        _log.info('Completed %r -> %r', source_uri, paths)
-        if self.config.messaging_settings:
-            # Optional library.
-            #: pylint: disable=import-error
-            from neocommon import message, Uri as NeoUri
-            uris = [NeoUri.parse(path) for path in paths]
-            with message.NeoMessenger(message.MessengerConnection(**self.config.messaging_settings)) as msg:
-                msg.announce_ancillary(
-                    message.AncillaryUpdate(
-                        ancillary_type=self.job_id,
-                        uris=uris,
-                        properties=md
-                    )
-                )
-
     def files_complete(self, source_uri, paths, msg_metadata=None):
         """
         Call on completion of multiple files.
@@ -459,7 +365,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :return:
         """
-        self._announce_files_complete(source_uri, paths, msg_metadata=msg_metadata)
+        _log.info('Completed %r -> %r', source_uri, paths)
 
     def file_complete(self, source_uri, path, msg_metadata=None):
         """
@@ -468,7 +374,7 @@ class NotifyResultHandler(ResultHandler):
         :type msg_metadata: dict of (str, str)
         :type path: str
         """
-        self._announce_files_complete(source_uri, [path], msg_metadata=msg_metadata)
+        _log.info('Completed %r -> %r', source_uri, path)
 
     def file_error(self, uri, summary, body):
         """
@@ -541,8 +447,6 @@ def run_loop(o):
                 reporter,
                 scheduled_item,
                 scheduled_time=scheduled_time,
-                # Use a unique log directory for each day
-                log_directory=get_day_log_dir(o.log_directory, scheduled_time),
                 lock_directory=o.lock_directory
             )
             running_children.add(p)
@@ -602,8 +506,6 @@ def run_items(o, *item_names):
             NotifyResultHandler(o, chosen_item.sanitized_name),
             chosen_item,
             scheduled_time=scheduled_time,
-            # Use a unique log directory for each day
-            log_directory=get_day_log_dir(o.log_directory, scheduled_time),
             lock_directory=o.lock_directory
         )
         running_children.add(p)
@@ -662,6 +564,6 @@ def _set_logging_levels(levels):
         _log.info('Set log level %s to %s', name, level)
 
 
-_LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
+_LOG_HANDLER = logging.StreamHandler(sys.stdout)
 _LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 _LOG_HANDLER.setFormatter(_LOG_FORMATTER)

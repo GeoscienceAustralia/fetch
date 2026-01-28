@@ -3,12 +3,9 @@ from builtins import str as text
 
 import tempfile
 
-import pytest
 from pathlib import Path
 
 from fetch import load
-
-with_neocommon = pytest.mark.with_neocommon
 
 
 def _fail_with_diff(reparsed_config, source_config):
@@ -42,20 +39,6 @@ def _check_load_dump_config(make_config):
 
 def test_dump_load_obj_full():
     _check_load_dump_config(_make_config)
-
-
-@with_neocommon
-def test_dump_load_obj_with_messaging():
-    def make_config_no_messaging():
-        c = _make_config()
-        c['messaging'] = {
-            'host': 'rhe-pma-test08.test.lan',
-            'username': 'fetch',
-            'password': 'fetch'
-        }
-        return c
-
-    _check_load_dump_config(make_config_no_messaging)
 
 
 def print_simple_obj_diff(dict1, dict2):
@@ -116,9 +99,6 @@ def _make_config():
     anc_data = '/tmp/anc'
     schedule = {
         'directory': '/tmp/anc-fetch',
-        'notify': {
-            'email': ['jeremy.hooke@ga.gov.au']
-        },
         'log': {
             'fetch': 'DEBUG'
         },
@@ -193,7 +173,9 @@ def _make_config():
                 'process': ShellFileProcessor(
                     command='/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" '
                             '{parent_dir}/{file_stem}.nc {parent_dir}/{file_stem}.tif',
-                    expect_file='{parent_dir}/{file_stem}.tif'
+                    upload_dir='{parent_dir}',
+                    bucket='ard-processing-data',
+                    prefix='ancillary/water_vapour'
                 )
             },
             'NPP GDAS-forecast': {

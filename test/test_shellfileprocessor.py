@@ -1,31 +1,104 @@
+"""
+A package for testing the code in the ShellFileProcessor class, in _core.py
+"""
+import pytest
+from unittest.mock import patch, call
 
-import os
-from pathlib import Path
+from fetch import s3
+from fetch import _core
+from fetch._core import ShellFileProcessor, FileProcessError
 
-from fetch._core import ShellFileProcessor
-
-
-def test_shellfilepro_required_files_there():
-    command = 'ls {base}.py'
-    # required_files = (r'^(?P<base>.*test.+)\.py$',['{base}.py','{base}.py'])
-    required_files = ('^(?P<base>.*test.+)\\.py$', ['{base}.py', '{base}.py'])
-    file_path = os.path.abspath(__file__)
-    expect_file = '{base}.py'
-    sfp = ShellFileProcessor(command=command, expect_file=expect_file, input_files=required_files)
-    results = sfp.process(file_path)
-
-    assert results == Path(__file__).absolute().as_posix()
+# Test Constants
+command = "run command on file {filename}"
+upload_dir = "/data/upload"
+bucket = "s3-bucket"
+prefix = "s3-prefix"
+input_file = "/data/staging/file.txt"
 
 
-def test_shellfilepro_required_files_not_there():
-    command = 'ls {base}.py'
-    required_files = (r'^(?P<base>.*test.+)\.py$', ['{base}.py', '/this/is/not/here/please.py'])
-    file_path = os.path.abspath(__file__)
-    sfp = ShellFileProcessor(command=command, expect_file=file_path, input_files=required_files)
-    results = sfp.process(file_path)
-    # A rather toothless assert given required_files_there would return the same result...
-    assert file_path == results
-    # Future option is to ask for a tmp_path, and make your command touch {tmp_path / 'test_file.txt'}.
-    # Then if the file exists, you know the command was run. It could work in both tests.
+def test_apply_file_pattern_basic():
+    p = ShellFileProcessor(
+        command=command,
+        upload_dir=upload_dir,
+        bucket=bucket,
+        prefix=prefix,
+    )
 
-# Add a test when no required_files parameter is supplied at all
+    result = p._apply_file_pattern(command, "/tmp/something.txt")
+
+    assert result == "run command on file something.txt"
+
+
+def test_process_success():
+    # Set up mocks
+    with (
+        patch("subprocess.call", return_value=0),
+        patch("os.path.exists", return_value=True),
+        patch.object(s3, "_s3"),
+        patch.object(_core, "_log") as mock_log
+    ):
+        p = ShellFileProcessor(
+            command=command,
+            upload_dir=upload_dir,
+            bucket=bucket,
+            prefix=prefix,
+        )
+
+        # assert success using return value (and no raised errors)
+        assert p.process(input_file) == "/data/upload/file.h5"
+
+        # confirm the correct messages are logged
+        mock_log.info.assert_called_once_with('Running %r', 'run command on file file.txt')
+        mock_log.debug.assert_has_calls([
+            call("Command completed successfully."),
+            call('File available %r', '/data/upload/file.h5')
+        ])
+
+
+def test_process_command_failed():
+    # Set up mocks
+    with (
+        patch("subprocess.call", return_value=1),
+        patch("os.path.exists", return_value=True),
+        patch.object(s3, "_s3"),
+        patch.object(_core, "_log") as mock_log
+    ):
+        p = ShellFileProcessor(
+            command=command,
+            upload_dir=upload_dir,
+            bucket=bucket,
+            prefix=prefix,
+        )
+
+        # Run code and confirm we get an expection back, checking type & message
+        with pytest.raises(FileProcessError, match="Return code 1 from command 'run command on file file.txt'"):
+            p.process(input_file)
+
+        # confirm the correct messages are logged
+        mock_log.info.assert_called_once_with('Running %r', 'run command on file file.txt')
+        mock_log.debug.assert_not_called()
+
+
+def test_process_output_file_missing():
+    # Set up mocks
+    with (
+        patch("subprocess.call", return_value=0),
+        patch("os.path.exists", return_value=False),
+        patch.object(s3, "_s3"),
+        patch.object(_core, "_log") as mock_log
+    ):
+        p = ShellFileProcessor(
+            command=command,
+            upload_dir=upload_dir,
+            bucket=bucket,
+            prefix=prefix,
+        )
+
+        # Run code and confirm we get an expection back, checking type & message
+        message = "Expected output not found '/data/upload/file.h5' for command 'run command on file file.txt'"
+        with pytest.raises(FileProcessError, match=message):
+            p.process(input_file)
+
+        # confirm the correct messages are logged
+        mock_log.info.assert_called_once_with('Running %r', 'run command on file file.txt')
+        mock_log.debug.assert_called_once_with("Command completed successfully.")

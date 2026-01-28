@@ -40,7 +40,6 @@ try:
             c = APIRequest(
                 self.url,
                 "datasets/%s" % (dataset, ),
-                self.email,
                 self.key,
                 self.trace,
                 verbose=self.verbose

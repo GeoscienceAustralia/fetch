@@ -10,7 +10,6 @@ import logging
 import os
 
 import yaml
-import yaml.resolver
 from croniter import croniter
 
 from . import ftp, http, ecmwf
@@ -137,7 +136,7 @@ class Config(object):
     Configuration.
     """
 
-    def __init__(self, directory, rules, notify_addresses, messaging_settings=None, log_levels=None):
+    def __init__(self, directory, rules, log_levels=None):
         """
         :type directory: str
         :type rules: list of ScheduledItem
@@ -150,15 +149,6 @@ class Config(object):
         # Empty list of rules is ok: they may be added after startup (a config reload/SIGHUP).
         self.rules = rules
 
-        self.notify_addresses = notify_addresses
-
-        if messaging_settings:
-            # Optional library.
-            #: pylint: disable=import-error
-            from neocommon.message import MessengerConnection
-            verify_can_construct(MessengerConnection, messaging_settings, identifier='messaging settings')
-
-        self.messaging_settings = messaging_settings
         self.log_levels = log_levels
 
     @classmethod
@@ -171,14 +161,7 @@ class Config(object):
         """
 
         directory = config.get('directory')
-        messaging_settings = config.get('messaging')
         log_levels = config.get('log')
-
-        notify_email_addresses = []
-        if 'notify' in config:
-            notify_config = config['notify']
-            if 'email' in notify_config:
-                notify_email_addresses = notify_config['email']
 
         rules = []
         if 'rules' in config:
@@ -190,8 +173,6 @@ class Config(object):
         return Config(
             directory,
             rules,
-            notify_email_addresses,
-            messaging_settings=messaging_settings,
             log_levels=log_levels
         )
 
@@ -202,11 +183,7 @@ class Config(object):
         """
         return remove_nones({
             'directory': self.directory,
-            'notify': {
-                'email': self.notify_addresses
-            },
             'log': self.log_levels,
-            'messaging': self.messaging_settings,
             'rules': dict([
                 (
                     r.name, remove_nones({

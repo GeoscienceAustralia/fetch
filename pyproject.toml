@@ -1,0 +1,40 @@
+[build-system]
+requires = [
+    "setuptools>=61",
+    "wheel",
+    "versioneer[toml]"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fetch"
+description = "Automatic data"
+requires-python = ">=3.7"
+
+authors = [
+    { name = "Jeremy Hooke", email = "jeremy.hooke@ga.gov.au" }
+]
+
+dynamic = ["version"]
+
+dependencies = [
+    "arrow",
+    "croniter",
+    "feedparser",
+    "lxml",
+    "pyyaml",
+    "requests>=2.21.0",
+    "boto3",
+    "pytest",
+    "mock",
+    "pylint",
+    "pep8",
+    "setproctitle; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+ecmwf = ["ecmwf-api-client"]
+
+[project.scripts]
+fetch-service = "fetch.scripts.service:main"
+fetch-now = "fetch.scripts.now:main"

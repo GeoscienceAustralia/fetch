@@ -5,11 +5,13 @@ import boto3
 _log = logging.getLogger(__name__)
 _s3 = boto3.client("s3")
 
+
 class FileUploadError(Exception):
     """
     An error in file processing.
     """
     pass
+
 
 def upload(filepath: str, bucket: str, prefix: str):
     """

@@ -355,7 +355,6 @@ class NotifyResultHandler(ResultHandler):
         self.config = config
         self.job_id = job_id
 
-
     def files_complete(self, source_uri, paths, msg_metadata=None):
         """
         Call on completion of multiple files.

@@ -3,7 +3,6 @@ from builtins import str as text
 
 import tempfile
 
-import pytest
 from pathlib import Path
 
 from fetch import load
@@ -174,9 +173,9 @@ def _make_config():
                 'process': ShellFileProcessor(
                     command='/usr/local/bin/gdal_translate -a_srs "+proj=latlong +datum=WGS84" '
                             '{parent_dir}/{file_stem}.nc {parent_dir}/{file_stem}.tif',
-                    upload_dir= '{parent_dir}',
-                    bucket= 'ard-processing-data',
-                    prefix= 'ancillary/water_vapour'
+                    upload_dir='{parent_dir}',
+                    bucket='ard-processing-data',
+                    prefix='ancillary/water_vapour'
                 )
             },
             'NPP GDAS-forecast': {

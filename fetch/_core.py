@@ -490,8 +490,9 @@ class ShellFileProcessor(FileProcessor):
         super(ShellFileProcessor, self).__init__()
         self.command = command
         self.upload_dir = upload_dir
-        self.bucket = bucket
-        self.prefix = prefix
+        # allow for env variables here. makes it eaier to switch between environments in containers
+        self.bucket = bucket if not bucket.startswith("env:") else os.environ[bucket.replace("env:", "")]
+        self.prefix = prefix if not prefix.startswith("env:") else os.environ[prefix.replace("env:", "")]
 
     def _apply_file_pattern(self, pattern, file_path):
         """

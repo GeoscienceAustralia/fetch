@@ -493,6 +493,10 @@ class ShellFileProcessor(FileProcessor):
         # allow for env variables here. makes it eaier to switch between environments in containers
         self.bucket = bucket if not bucket.startswith("env:") else os.environ[bucket.replace("env:", "")]
         self.prefix = prefix if not prefix.startswith("env:") else os.environ[prefix.replace("env:", "")]
+        _log.debug('Command set to %r', self.command)
+        _log.debug('Upload directory set to %r', self.upload_dir)
+        _log.debug('S3 bucket set to %r', self.bucket)
+        _log.debug('S3 prefix set to %r', self.prefix)
 
     def _apply_file_pattern(self, pattern, file_path):
         """

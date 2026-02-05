@@ -434,15 +434,15 @@ def setup_logging(logging_config: LoggingConfig):
     # else:
     log_obj = sys.stderr
 
-    if log_obj.isatty():
+    # if log_obj.isatty():
         # Pretty printing when run in a terminal session.
-        processors = shared_processors + [structlog.dev.ConsoleRenderer()]
-    else:
-        # Log JSON when run otherwise
-        processors = shared_processors + [
-            structlog.processors.dict_tracebacks,
-            structlog.processors.JSONRenderer(),
-        ]
+    processors = shared_processors + [structlog.dev.ConsoleRenderer()]
+    # else:
+    #     # Log JSON when run otherwise
+    #     processors = shared_processors + [
+    #         structlog.processors.dict_tracebacks,
+    #         structlog.processors.JSONRenderer(),
+    #     ]
 
     import logging
 

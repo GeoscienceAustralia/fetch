@@ -1025,6 +1025,7 @@ def download_and_convert(
         final_path = convert_to_h5(base_output_dir, file_path, output_folder, log=log)
         log.info("converted", output_h5_path=final_path)
         if clean_up:
+            log.warn("deleting", hdf_path=file_path, hdf_xml_path=file_xml_path)
             file_path.unlink()
             file_xml_path.unlink()
     else:

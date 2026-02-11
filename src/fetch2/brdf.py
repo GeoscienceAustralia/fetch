@@ -1022,9 +1022,9 @@ def download_and_convert(
 
     if do_convert:
         log.info("converting", hdf_path=file_path, hdf_xml_path=file_xml_path)
-        final_path = convert_to_h5(base_output_dir, file_path, output_folder, log=log)
+        final_path: Path | None = convert_to_h5(base_output_dir, file_path, output_folder, log=log)
         log.info("converted", output_h5_path=final_path)
-        if clean_up:
+        if clean_up and final_path:
             log.warn("deleting", hdf_path=file_path, hdf_xml_path=file_xml_path)
             file_path.unlink()
             file_xml_path.unlink()
@@ -1040,7 +1040,10 @@ def download_and_convert(
     return final_path
 
 
-def convert_to_h5(base_output_dir: Path, input_hdf_file: Path, out_dir: Path, log=LOG) -> Path:
+def convert_to_h5(base_output_dir: Path, input_hdf_file: Path, out_dir: Path, log=LOG) -> Optional[Path]:
+    """
+    Runs swfo-convert. If there is already a conversion in progress or the final file exists, this will do nothing and return None.
+    """
     expected_hdf_xml_path = input_hdf_file.with_name(f"{input_hdf_file.name}.xml")
     if not expected_hdf_xml_path.exists():
         raise ValueError(
@@ -1048,6 +1051,16 @@ def convert_to_h5(base_output_dir: Path, input_hdf_file: Path, out_dir: Path, lo
         )
 
     tmp_output = get_working_dir(out_dir)
+
+    # check if the output file already exists in either the working dir or the final destination to avoid unnecessary conversion
+    expected_output_file = tmp_output / input_hdf_file.with_suffix(".h5").name
+    if expected_output_file.exists():
+        log.info("skip_conversion_existing_output", output_h5=expected_output_file)
+        return None
+    final_output_file = out_dir / expected_output_file.name
+    if final_output_file.exists():
+        log.info("skip_conversion_existing_final_output", output_h5=final_output_file)
+        return None
 
     try:
         cmd = (

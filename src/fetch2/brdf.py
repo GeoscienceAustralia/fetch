@@ -260,6 +260,8 @@ class LoggingConfig(BaseModel):
         if not self.log_file_pattern:
             return None
 
+        os.makedirs(os.path.dirname(self.log_file_pattern), exist_ok=True)
+
         now = datetime.datetime.now()
         return Path(
             self.log_file_pattern.format(

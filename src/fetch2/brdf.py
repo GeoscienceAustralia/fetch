@@ -1,5 +1,7 @@
 import datetime
+import grp
 import os
+import pwd
 import re
 import shlex
 import shutil
@@ -15,21 +17,21 @@ from concurrent.futures import (
 from concurrent.futures import (
     wait as wait_for_future,
 )
-from datetime import datetime as dt
 from datetime import date as date_type
+from datetime import datetime as dt
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Optional, Set, Tuple, Union, Dict
+from typing import Any, Dict, Iterable, Iterator, Optional, Set, Tuple, Union
 
 import click
 import httpx
 import structlog
-import yaml
-from pydantic import BaseModel, Field, field_validator
-from httpx import URL
 
 # ipv6 has issues to USGS from NCI. Disable it.
 import urllib3.util.connection
+import yaml
+from httpx import URL
+from pydantic import BaseModel, Field, field_validator
 
 urllib3.util.connection.HAS_IPV6 = False
 socket.has_ipv6 = False
@@ -38,6 +40,19 @@ socket.has_ipv6 = False
 LOGIN_TIMEOUT_SECONDS = 60 * 60
 
 LOG = structlog.get_logger()
+
+uid = os.getuid()
+gid = os.getgid()
+print("uid:", uid, "user:", pwd.getpwuid(uid).pw_name)
+print("gid:", gid, "group:", grp.getgrgid(gid).gr_name)
+
+st = os.lstat("/output")
+
+print("/output:")
+print("  mode:", st.st_mode)
+print("  uid:", st.st_uid, "owner:", pwd.getpwuid(st.st_uid).pw_name)
+print("  gid:", st.st_gid, "group:", grp.getgrgid(st.st_gid).gr_name)
+
 
 # Example file name:
 # MCD43A1.A2011039.h22v14.061.2021182171212.hdf
@@ -82,18 +97,25 @@ S3_PREFIX = os.environ.get("BRDF_S3_PREFIX")
 # Set up an S3 client
 if USE_S3:
     import boto3
+
     S3_CLIENT = boto3.client("s3")
+
 
 def to_s3_key(base_path: Path, path: Path) -> str:
     return str(Path(S3_PREFIX) / path.relative_to(base_path))
+
+
 def to_file_path(base_path: Path, s3_key: str) -> Path:
     return base_path / s3_key.relative_to(S3_PREFIX)
-    
-def finalize_download(log: structlog.BoundLogger, base_path: Path, src_path: Path, dest_path: Path) -> None:
+
+
+def finalize_download(
+    log: structlog.BoundLogger, base_path: Path, src_path: Path, dest_path: Path
+) -> None:
     """Moves a downloaded file from a temporary location to its final location. Will upload to s3 if configured."""
-    
+
     # Destination should strip the file prefix and add the S3 prefix
-    
+
     if USE_S3:
         dest_key = to_s3_key(base_path, dest_path)
         log.info(f"Uploading to {dest_key}")
@@ -106,16 +128,16 @@ def finalize_download(log: structlog.BoundLogger, base_path: Path, src_path: Pat
     else:
         src_path.rename(dest_path)
 
+
 def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
     """List children of the given path, either locally or in S3, depending on configuration."""
     if USE_S3:
-        
         # Fix the path prefix
-        s3_path = to_s3_key(base_path, path) 
+        s3_path = to_s3_key(base_path, path)
         LOG.debug(f"Listing S3 path {s3_path}")
 
         # Get a paginator for listed objects
-        paginator = S3_CLIENT.get_paginator('list_objects_v2')
+        paginator = S3_CLIENT.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=S3_BUCKET, Prefix=s3_path)
         first_page = True
         for page in pages:
@@ -124,8 +146,8 @@ def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
                 return None
             first_page = False
 
-            for obj in page.get('Contents', []):
-                yield to_file_path(base_path, obj['Key'])
+            for obj in page.get("Contents", []):
+                yield to_file_path(base_path, obj["Key"])
     else:
         if path.exists() and path.is_dir():
             for child in path.iterdir():
@@ -133,9 +155,11 @@ def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
         else:
             return None
 
+
 def file_exists(log: structlog.BoundLogger, base_path: Path, path: Path) -> bool:
     """Check if the file exists either locally or in S3, depending on configuration."""
     from botocore.exceptions import ClientError
+
     if USE_S3:
         try:
             s3_key = to_s3_key(base_path, path)
@@ -144,7 +168,7 @@ def file_exists(log: structlog.BoundLogger, base_path: Path, path: Path) -> bool
             return True
         except ClientError as e:
             # Object does not exist.
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 log.debug(f"File does not exist in s3 at {s3_key}")
                 return False
             # For any other error (e.g., 403 Forbidden, 500 Server Error), re-raise the exception
@@ -152,6 +176,7 @@ def file_exists(log: structlog.BoundLogger, base_path: Path, path: Path) -> bool
                 return path.exists()
     else:
         return False
+
 
 # Configuration Models
 class DateRange(BaseModel):
@@ -437,7 +462,7 @@ def setup_logging(logging_config: LoggingConfig):
     log_obj = sys.stderr
 
     # if log_obj.isatty():
-        # Pretty printing when run in a terminal session.
+    # Pretty printing when run in a terminal session.
     processors = shared_processors + [structlog.dev.ConsoleRenderer()]
     # else:
     #     # Log JSON when run otherwise
@@ -782,7 +807,7 @@ def find_days_with_missing_brdf_tiles(
 
         if not _DATE_FOLDER_PATTERN.match(date_folder.name):
             continue
-        
+
         if not USE_S3 and not date_folder.is_dir():
             continue
 
@@ -1024,7 +1049,9 @@ def download_and_convert(
 
     if do_convert:
         log.info("converting", hdf_path=file_path, hdf_xml_path=file_xml_path)
-        final_path: Path | None = convert_to_h5(base_output_dir, file_path, output_folder, log=log)
+        final_path: Path | None = convert_to_h5(
+            base_output_dir, file_path, output_folder, log=log
+        )
         log.info("converted", output_h5_path=final_path)
         if clean_up and final_path:
             log.warn("deleting", hdf_path=file_path, hdf_xml_path=file_xml_path)
@@ -1042,7 +1069,9 @@ def download_and_convert(
     return final_path
 
 
-def convert_to_h5(base_output_dir: Path, input_hdf_file: Path, out_dir: Path, log=LOG) -> Optional[Path]:
+def convert_to_h5(
+    base_output_dir: Path, input_hdf_file: Path, out_dir: Path, log=LOG
+) -> Optional[Path]:
     """
     Runs swfo-convert. If there is already a conversion in progress or the final file exists, this will do nothing and return None.
     """

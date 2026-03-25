@@ -118,7 +118,7 @@ def finalize_download(
 
     if USE_S3:
         dest_key = to_s3_key(base_path, dest_path)
-        log.info(f"Uploading to {dest_key}")
+        log.info(f"Uploading to s3://{S3_BUCKET}/{dest_key}")
         S3_CLIENT.upload_file(
             Filename=str(src_path),
             Bucket=S3_BUCKET,
@@ -134,7 +134,7 @@ def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
     if USE_S3:
         # Fix the path prefix
         s3_path = to_s3_key(base_path, path)
-        LOG.debug(f"Listing S3 path {s3_path}")
+        LOG.debug(f"Listing S3 path s3://{S3_BUCKET}/{s3_path}")
 
         # Get a paginator for listed objects
         paginator = S3_CLIENT.get_paginator("list_objects_v2")
@@ -142,7 +142,7 @@ def get_children(base_path: Path, path: Path) -> Optional[Iterator[Path]]:
         first_page = True
         for page in pages:
             if first_page and page.get("KeyCount", 0) == 0:
-                LOG.debug(f"No S3 objects were found at {s3_path}")
+                LOG.debug(f"No S3 objects were found at s3://{S3_BUCKET}/{s3_path}")
                 return None
             first_page = False
 
@@ -164,15 +164,16 @@ def file_exists(log: structlog.BoundLogger, base_path: Path, path: Path) -> bool
         try:
             s3_key = to_s3_key(base_path, path)
             S3_CLIENT.head_object(Bucket=S3_BUCKET, Key=s3_key)
-            log.debug(f"File exists in s3 at {s3_key}")
+            log.debug(f"File exists in s3 at s3://{S3_BUCKET}/{s3_key}")
             return True
         except ClientError as e:
             # Object does not exist.
             if e.response["Error"]["Code"] == "404":
-                log.debug(f"File does not exist in s3 at {s3_key}")
+                log.debug(f"File does not exist in s3 at s3://{S3_BUCKET}/{s3_key}")
                 return False
             # For any other error (e.g., 403 Forbidden, 500 Server Error), re-raise the exception
             else:
+                log.debug(f"Fil exist check failed for s3://{S3_BUCKET}/{s3_key}: {e}")
                 return path.exists()
     else:
         return False

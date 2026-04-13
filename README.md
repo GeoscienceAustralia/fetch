@@ -51,15 +51,25 @@ Otherwise, you can pip install it:
 uv pip install -e .
 ```
 
-Install the optional water vapour CLI and its dependencies:
+Install the optional water vapour CLI and its dependencies (assuming you already have wagl):
 
 ```bash
 uv sync --extra water-vapour
 uv run --extra water-vapour fetch2-wv --help
-uv run --extra water-vapour fetch2-wv /g/data/v10/eoancillarydata-2/water_vapour
+uv run --extra water-vapour fetch2-wv eoancillary/water_vapour
 ```
 
 `wagl` is required for water vapour processing. NCI environments already have an installed, but otherwise see https://github.com/OpenDataCubePipelines/ard-pipeline
+
+If you've built the ard:dev docker container from ard-pipeline repo, there are convenient Justfile commands for running inside docker:
+
+```
+# Run wv tests in docker
+just test
+# Run a fetch of data (2026, stopping at January 10). Assumes you have a env.sh file with ecmwf credentials.
+just fetch-wv test-data-directory --year 2026 --through 2026-01-10
+```
+
 
 Run tests:
 

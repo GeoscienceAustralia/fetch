@@ -56,10 +56,10 @@ Install the optional water vapour CLI and its dependencies:
 ```bash
 uv sync --extra water-vapour
 uv run --extra water-vapour fetch2-wv --help
+uv run --extra water-vapour fetch2-wv /g/data/v10/eoancillarydata-2/water_vapour
 ```
 
-`wagl` is also required for water vapour processing, but we assume readers already know how they want to provide that environment.
-If needed, install `wagl` from https://github.com/OpenDataCubePipelines/ard-pipeline
+`wagl` is required for water vapour processing. NCI environments already have an installed, but otherwise see https://github.com/OpenDataCubePipelines/ard-pipeline
 
 Run tests:
 

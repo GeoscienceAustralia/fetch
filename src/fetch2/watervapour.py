@@ -404,8 +404,12 @@ def tcwv_output_filepath(outdir: Path, year: int) -> Path:
     return outdir / f"pr_wtr.eatm.{year}.h5"
 
 
+def tcwv_versions_dir(outdir: Path, year: int) -> Path:
+    return outdir / str(year)
+
+
 def tcwv_snapshot_filepath(outdir: Path, year: int, label: str) -> Path:
-    return outdir / f"pr_wtr.eatm.{year}.{label}.h5"
+    return tcwv_versions_dir(outdir, year) / f"pr_wtr.eatm.{year}.{label}.h5"
 
 
 def tcwv_zip_filepath(workdir: Path, year: int) -> Path:
@@ -437,7 +441,8 @@ def update_latest_symlink(target_path: Path, symlink_path: Path):
     if tmp_link.exists() or tmp_link.is_symlink():
         tmp_link.unlink()
 
-    tmp_link.symlink_to(target_path.name)
+    target_relpath = os.path.relpath(target_path, start=symlink_path.parent)
+    tmp_link.symlink_to(target_relpath)
     tmp_link.replace(symlink_path)
 
 
@@ -481,23 +486,25 @@ def build_tcwv_dataset(
         outdir, year, snapshot, output_label
     )
 
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    dates = sorted(set(dates))
+    total = len(dates)
     resolved_input_h5 = Path(input_h5) if input_h5 else None
     if snapshot and resolved_input_h5 is None:
         default_seed = latest_symlink_path
         if default_seed.exists() or default_seed.is_symlink():
             resolved_input_h5 = default_seed
 
-    initialise_output_file(output_filepath, resolved_input_h5)
-
-    workdir = Path(workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
-
-    dates = sorted(set(dates))
-    total = len(dates)
-    processed_any = False
+    existing_names = (
+        existing_dataset_names(resolved_input_h5)
+        if resolved_input_h5 is not None
+        else existing_dataset_names(output_filepath)
+    )
+    pending_dates: list[tuple[dt.date, list[str]]] = []
 
     for idx, date in enumerate(dates, start=1):
-        existing_names = existing_dataset_names(output_filepath)
         date_hours = missing_hours_for_date(date, hours, existing_names)
         if not date_hours:
             LOGGER.info(
@@ -507,14 +514,27 @@ def build_tcwv_dataset(
                 total,
             )
             continue
+        pending_dates.append((date, date_hours))
 
+    if not pending_dates:
+        LOGGER.info("No new data was committed")
+        return
+
+    if snapshot:
+        output_filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    initialise_output_file(output_filepath, resolved_input_h5)
+
+    processed_any = False
+    total_pending = len(pending_dates)
+    for idx, (date, date_hours) in enumerate(pending_dates, start=1):
         with tempfile.TemporaryDirectory(dir=workdir) as tmpdir:
             tmpdir = Path(tmpdir)
             LOGGER.info(
                 "Downloading %s (%s/%s) for hours %s",
                 date.isoformat(),
                 idx,
-                total,
+                total_pending,
                 ", ".join(date_hours),
             )
             zip_file = tmpdir / f"tcwv-{date.isoformat()}.zip"
@@ -544,6 +564,14 @@ def build_tcwv_dataset(
             write_metadata_sidecar(output_filepath, metadata_records)
             LOGGER.info("Committed %s into %s", date.isoformat(), output_filepath)
             processed_any = True
+            existing_names.update(
+                dataset_name_for_datetime(
+                    dt.datetime.combine(
+                        date, dt.time(hour=int(hour), tzinfo=dt.timezone.utc)
+                    )
+                )
+                for hour in date_hours
+            )
 
     if not processed_any:
         LOGGER.info("No new data was committed")
@@ -620,8 +648,17 @@ def add_common_options(parser: argparse.ArgumentParser):
         default=None,
         help="Hour in HH format. Repeat to request multiple times. Default: 00, 06, 12, 18.",
     )
-    parser.add_argument("--outdir", default="output/ecmwf-tcwv")
-    parser.add_argument("--workdir", default="output/ecmwf-tcwv")
+    parser.add_argument(
+        "water_vapour_dir",
+        nargs="?",
+        default="output/ecmwf-tcwv",
+        help="Directory containing annual water vapour symlinks and year-based version folders.",
+    )
+    parser.add_argument(
+        "--workdir",
+        default=None,
+        help="Temporary working directory. Defaults to <water_vapour_dir>/work.",
+    )
     parser.add_argument(
         "--input-h5",
         default=None,
@@ -629,8 +666,9 @@ def add_common_options(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "--snapshot",
-        action="store_true",
-        help="Write to a versioned snapshot file instead of modifying the default annual output in place.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write to a versioned snapshot file instead of modifying the annual output in place. Default: enabled.",
     )
     parser.add_argument(
         "--output-label",
@@ -639,8 +677,9 @@ def add_common_options(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "--update-latest-symlink",
-        action="store_true",
-        help="When using --snapshot, update pr_wtr.eatm.<year>.h5 to point to the new snapshot on success.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When using snapshots, update pr_wtr.eatm.<year>.h5 to point to the new version on success. Default: enabled.",
     )
     parser.add_argument(
         "--bounds",
@@ -655,54 +694,53 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Download ECMWF ERA5 total column water vapour and build DEA-compatible annual HDF5 output."
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    fetch = subparsers.add_parser(
-        "fetch",
-        help="Download one or more explicit dates and append them into the annual output file.",
-    )
-    fetch.add_argument(
+    parser.add_argument(
         "--date",
         action="append",
-        required=True,
-        help="Date in YYYY-MM-DD format. Repeat to fetch multiple dates.",
+        default=None,
+        help="Date in YYYY-MM-DD format. Repeat to fetch multiple explicit dates.",
     )
-    add_common_options(fetch)
-
-    backfill = subparsers.add_parser(
-        "backfill",
-        help="Download a continuous date range, including year-to-date runs.",
-    )
-    range_group = backfill.add_mutually_exclusive_group(required=True)
+    range_group = parser.add_mutually_exclusive_group()
     range_group.add_argument(
         "--year",
         type=int,
-        help="Backfill from January 1 of this year through --through or today.",
+        help="Download from January 1 of this year through --through or today.",
     )
-    range_group.add_argument("--start-date", help="Start date in YYYY-MM-DD format.")
-    backfill.add_argument(
+    range_group.add_argument(
+        "--start-date",
+        help="Start date in YYYY-MM-DD format. Use with --end-date.",
+    )
+    parser.add_argument(
         "--end-date", help="End date in YYYY-MM-DD format. Required with --start-date."
     )
-    backfill.add_argument(
+    parser.add_argument(
         "--through",
         help="End date in YYYY-MM-DD format for --year runs. Defaults to today.",
     )
-    add_common_options(backfill)
-
+    add_common_options(parser)
     return parser
 
 
 def resolve_dates(args) -> list[dt.date]:
-    if args.command == "fetch":
+    if args.date:
         return [parse_date(value) for value in args.date]
 
     if args.year is not None:
         through = parse_date(args.through) if args.through else None
         return dates_for_year_to_date(args.year, through)
 
-    if not args.end_date:
-        raise ValueError("--end-date is required with --start-date")
-    return date_range(parse_date(args.start_date), parse_date(args.end_date))
+    if args.start_date:
+        if not args.end_date:
+            raise ValueError("--end-date is required with --start-date")
+        return date_range(parse_date(args.start_date), parse_date(args.end_date))
+
+    if args.end_date:
+        raise ValueError("--end-date requires --start-date")
+
+    if args.through:
+        raise ValueError("--through requires --year")
+
+    return dates_for_year_to_date(dt.date.today().year)
 
 
 def main():
@@ -714,11 +752,12 @@ def main():
     args = parser.parse_args()
     dates = resolve_dates(args)
     hours = parse_hours(args.hour)
+    workdir = args.workdir or str(Path(args.water_vapour_dir) / "work")
     build_tcwv_dataset(
         dates=dates,
         hours=hours,
-        outdir=args.outdir,
-        workdir=args.workdir,
+        outdir=args.water_vapour_dir,
+        workdir=workdir,
         bounds=args.bounds,
         input_h5=args.input_h5,
         snapshot=args.snapshot,

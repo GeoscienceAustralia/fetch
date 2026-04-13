@@ -2,6 +2,8 @@
 Utility functions used in the conversion process to hdf5 archives
 """
 
+from __future__ import annotations
+
 from typing import Optional, List, Dict
 from io import StringIO, BufferedReader
 import os

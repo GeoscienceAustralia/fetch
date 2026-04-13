@@ -22,9 +22,18 @@ version = "0.1.0"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0.0", "pytest-mock>=3.14.0", "flask>=3.0.0"]
+water-vapour = [
+    "cdsapi>=0.7.7",
+    "h5py>=3.14.0",
+    "pandas>=2.3.2",
+    "rasterio>=1.4.3",
+    "requests>=2.32.4",
+    "ruamel.yaml>=0.18.14"
+]
 
 [project.scripts]
 fetch2-brdf = "fetch2.brdf:cli"
+fetch2-wv = "fetch2.watervapour:main"
 
 [tool.basedpyright]
 # This is less strict than pyright's recommended

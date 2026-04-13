@@ -13,12 +13,23 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-import h5py
-import pandas
-import rasterio
-import yaml
-from osgeo import osr
-from requests.exceptions import HTTPError
+try:
+    import h5py
+    import pandas
+    import rasterio
+    import yaml
+    import requests
+    from requests.exceptions import HTTPError
+except ImportError:  # pragma: no cover
+    h5py = None
+    pandas = None
+    rasterio = None
+    requests = None
+    yaml = None
+
+    class HTTPError(Exception):
+        """Fallback placeholder when requests is unavailable."""
+
 
 from .h5utils import atomic_h5_write, write_h5_md
 
@@ -27,9 +38,6 @@ try:
 except ImportError:  # pragma: no cover
     cdsapi = None
 
-
-CRS = osr.SpatialReference()
-CRS.ImportFromEPSG(4326)
 
 UUID_NAMESPACE = uuid.UUID("48682821-4061-4635-83aa-6a6ee8e10ceb")
 PRODUCT_HREF = "https://collections.dea.ga.gov.au/ga_c_c_prwtrfallback_1"
@@ -44,9 +52,50 @@ DEFAULT_HOURS = ["00", "06", "12", "18"]
 LOGGER = logging.getLogger(__name__)
 
 
+def _require_runtime_deps():
+    missing = []
+    for name, module in (
+        ("h5py", h5py),
+        ("pandas", pandas),
+        ("rasterio", rasterio),
+        ("PyYAML", yaml),
+        ("requests", requests),
+    ):
+        if module is None:
+            missing.append(name)
+
+    if missing:
+        deps = ", ".join(missing)
+        raise RuntimeError(
+            "Water vapour dependencies are not installed "
+            f"({deps}). Install the feature extra with "
+            "`uv sync --extra water-vapour` or "
+            "`uv pip install -e '.[water-vapour]'`."
+        )
+
+
+def _crs_wkt() -> str:
+    _require_runtime_deps()
+    return rasterio.crs.CRS.from_epsg(4326).to_wkt()
+
+
+def _require_wagl():
+    try:
+        from wagl.hdf5 import attach_attributes, write_dataframe, write_h5_image
+        from wagl.hdf5.compression import H5CompressionFilter
+    except ImportError as err:  # pragma: no cover
+        raise RuntimeError(
+            "wagl is required for the water vapour feature; install it from "
+            "https://github.com/OpenDataCubePipelines/ard-pipeline.git"
+        ) from err
+
+    return attach_attributes, write_dataframe, write_h5_image, H5CompressionFilter
+
+
 def _utc_timestamp_from_band(
     ds: rasterio.DatasetReader, index: int
 ) -> pandas.Timestamp:
+    _require_runtime_deps()
     return pandas.to_datetime(int(ds.tags(index)["GRIB_REF_TIME"]), unit="s", utc=True)
 
 
@@ -84,6 +133,7 @@ def download_tcwv_zip(
 
 
 def h5_index_dataframe(ds: rasterio.DatasetReader) -> pandas.DataFrame:
+    _require_runtime_deps()
     df = pandas.DataFrame(
         {
             "timestamp": [_utc_timestamp_from_band(ds, i + 1) for i in range(ds.count)],
@@ -95,7 +145,8 @@ def h5_index_dataframe(ds: rasterio.DatasetReader) -> pandas.DataFrame:
 
 
 def h5_write_band(ds, df, index, out_h5, compression, filter_opts):
-    from wagl.hdf5 import write_h5_image
+    _require_runtime_deps()
+    _, _, write_h5_image, _ = _require_wagl()
 
     ds_name = df.iloc[index - 1].dataset_name
     f_opts = {} if not filter_opts else filter_opts.copy()
@@ -104,7 +155,7 @@ def h5_write_band(ds, df, index, out_h5, compression, filter_opts):
     attrs["timestamp"] = df.iloc[index - 1]["timestamp"].to_pydatetime()
     attrs["band_name"] = df.iloc[index - 1]["band_name"]
     attrs["geotransform"] = ds.transform.to_gdal()
-    attrs["crs_wkt"] = CRS.ExportToWkt()
+    attrs["crs_wkt"] = _crs_wkt()
 
     if "chunks" not in f_opts:
         f_opts["chunks"] = ds.block_shapes[index - 1]
@@ -120,7 +171,8 @@ def h5_write_band(ds, df, index, out_h5, compression, filter_opts):
 
 
 def write_index(out_h5: h5py.File, rows: pandas.DataFrame, compression):
-    from wagl.hdf5 import write_dataframe
+    _require_runtime_deps()
+    _, write_dataframe, _, _ = _require_wagl()
 
     attrs = {"description": "Timestamp and Band Name index information."}
     if "INDEX" in out_h5:
@@ -129,6 +181,7 @@ def write_index(out_h5: h5py.File, rows: pandas.DataFrame, compression):
 
 
 def collect_index_from_h5(h5_file: Path) -> pandas.DataFrame:
+    _require_runtime_deps()
     records = []
     with h5py.File(h5_file, "r") as h5:
 
@@ -177,6 +230,7 @@ def existing_dataset_names(h5_file: Path) -> set[str]:
 
 
 def load_metadata_docs_from_h5(h5_file: Path) -> list[dict]:
+    _require_runtime_deps()
     with h5py.File(h5_file, "r") as h5:
         if "METADATA" not in h5 or "CURRENT-LIST" not in h5["METADATA"]:
             return []
@@ -195,8 +249,8 @@ def convert_tcwv_zips_to_h5(
     compression=None,
     filter_opts=None,
 ):
-    from wagl.hdf5 import attach_attributes
-    from wagl.hdf5.compression import H5CompressionFilter
+    _require_runtime_deps()
+    attach_attributes, _, _, H5CompressionFilter = _require_wagl()
 
     if compression is None:
         compression = H5CompressionFilter.LZF
@@ -337,6 +391,7 @@ def build_metadata_docs(output_name: str, metadata_records: list[dict]) -> list[
 
 
 def write_metadata_sidecar(h5_file: Path, metadata_records: list[dict]):
+    _require_runtime_deps()
     metadata_file = h5_file.with_suffix(".ga-md.yaml")
     docs = load_metadata_docs_from_h5(h5_file)
     if not docs:
@@ -409,6 +464,7 @@ def build_tcwv_dataset(
     output_label: str | None = None,
     update_latest: bool = False,
 ):
+    _require_runtime_deps()
     if not dates:
         raise ValueError("At least one date is required")
 

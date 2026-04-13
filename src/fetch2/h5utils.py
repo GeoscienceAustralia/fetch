@@ -12,8 +12,12 @@ from pathlib import Path
 import tempfile
 from contextlib import contextmanager
 
-from ruamel.yaml import YAML as _YAML
-import h5py
+try:
+    from ruamel.yaml import YAML as _YAML
+    import h5py
+except ImportError:  # pragma: no cover
+    _YAML = None
+    h5py = None
 
 
 FALLBACK_UUID_NAMESPACE = uuid.UUID("c5908e58-7301-4054-9f04-a0fa8cdef63b")
@@ -22,8 +26,25 @@ PRIVATE_NAMESPACE = ".METADATA"
 METADATA_PTR = "CURRENT"
 METADATA_LIST_PTR = "CURRENT-LIST"
 
-YAML = _YAML()
-VLEN_STRING = h5py.special_dtype(vlen=str)
+YAML = _YAML() if _YAML is not None else None
+VLEN_STRING = h5py.special_dtype(vlen=str) if h5py is not None else None
+
+
+def _require_runtime_deps():
+    missing = []
+    if _YAML is None:
+        missing.append("ruamel.yaml")
+    if h5py is None:
+        missing.append("h5py")
+
+    if missing:
+        deps = ", ".join(missing)
+        raise RuntimeError(
+            "Water vapour dependencies are not installed "
+            f"({deps}). Install the feature extra with "
+            "`uv sync --extra water-vapour` or "
+            "`uv pip install -e '.[water-vapour]'`."
+        )
 
 
 def _get_next_md_id(h5_group: h5py.Group, group_prefix: str) -> int:
@@ -38,6 +59,7 @@ def _get_next_md_id(h5_group: h5py.Group, group_prefix: str) -> int:
     :return:
         next numeric id to use as a document name
     """
+    _require_runtime_deps()
     ids = [0]
 
     def _append_id(h5_key):
@@ -68,6 +90,7 @@ def _write_dataset(
     :param track_order:
         flag to track insertion order on h5Groups
     """
+    _require_runtime_deps()
     dataset_path = dataset_path.lstrip("/")
     doc_group = "/".join((PRIVATE_NAMESPACE, dataset_path))
     if not h5_group.get(doc_group):
@@ -109,6 +132,7 @@ def create_groups(root: h5py.Group, group_path: str, track_order: bool = True):
     :param track_order:
         determines if the order for the h5py.Groups should be tracked
     """
+    _require_runtime_deps()
     _parts = Path(group_path).parts
 
     if root.get(group_path):
@@ -134,6 +158,7 @@ def _append_data_to_existing_file(
         Add insertion order tracking to created groups
     """
 
+    _require_runtime_deps()
     if track_order:
         _traversal_step = -1
     else:
@@ -203,6 +228,7 @@ def write_h5_md(
         for a single dataset h5 collection provide '/'
     """
 
+    _require_runtime_deps()
     collection_path = "/".join((PUBLIC_NAMESPACE, METADATA_LIST_PTR))
     known_metadata_refs = []
     new_metadata_refs = []
@@ -274,6 +300,7 @@ def generate_fallback_uuid(
     :return:
         UUID for the specified product
     """
+    _require_runtime_deps()
     return uuid.uuid5(
         uuid_namespace,
         "{}?{}".format(product_href, urllib.parse.urlencode(product_params)),
@@ -289,6 +316,7 @@ def generate_md5sum(src: BufferedReader, chunk_size: int = 16384):
     :param chunk_size:
         chunk_size to used to calculate md5sum
     """
+    _require_runtime_deps()
     md5_hash = hashlib.md5()
     for chunk in iter(lambda: src.read(chunk_size), b""):
         md5_hash.update(chunk)
@@ -313,6 +341,7 @@ def atomic_h5_write(fname: Path, mode: str = "a", **kwargs):
         key word arguments to h5file creation
 
     """
+    _require_runtime_deps()
     os_fid, tpath = tempfile.mkstemp(dir=fname.parent, prefix=".tmp", suffix=".h5")
     fp = Path(tpath)
     preexisting = fname.exists()

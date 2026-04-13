@@ -51,6 +51,16 @@ Otherwise, you can pip install it:
 uv pip install -e .
 ```
 
+Install the optional water vapour CLI and its dependencies:
+
+```bash
+uv sync --extra water-vapour
+uv run --extra water-vapour fetch2-wv --help
+```
+
+`wagl` is also required for water vapour processing, but we assume readers already know how they want to provide that environment.
+If needed, install `wagl` from https://github.com/OpenDataCubePipelines/ard-pipeline
+
 Run tests:
 
 ```bash

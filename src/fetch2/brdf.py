@@ -99,6 +99,12 @@ class DateRange(BaseModel):
         True
         >>> end > start
         True
+        >>> dr = DateRange(begin="2025-03-03", end=-1)
+        >>> start, end = dr.resolve_dates()
+        >>> start
+        datetime.date(2025, 3, 3)
+        >>> end > start
+        True
         """
         today = datetime.date.today()
 

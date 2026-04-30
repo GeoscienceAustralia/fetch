@@ -28,6 +28,30 @@ def test_update_latest_symlink_targets_year_subdirectory(tmp_path):
     assert symlink.readlink() == Path("2026/pr_wtr.eatm.2026.2026-04-13-00.h5")
 
 
+def test_metadata_uuid_uses_stable_source_layer_not_output_name_or_band_index():
+    base_record = {
+        "checksum": 1234,
+        "ref_time": "1773979200",
+        "datetime": "2026-03-20T06:00:00+00:00",
+        "geometry": {"type": "Polygon", "coordinates": []},
+        "shape": [1, 1],
+        "transform": [1, 0, 0, 0, -1, 1],
+        "layer_name": "2026/MARCH-20/0600",
+    }
+
+    full_request_record = {**base_record, "band_index": 2}
+    subset_request_record = {**base_record, "band_index": 1}
+
+    latest_docs = watervapour.build_metadata_docs(
+        "pr_wtr.eatm.2026.h5", [full_request_record]
+    )
+    snapshot_docs = watervapour.build_metadata_docs(
+        "pr_wtr.eatm.2026.2026-04-13-00.h5", [subset_request_record]
+    )
+
+    assert latest_docs[0]["id"] == snapshot_docs[0]["id"]
+
+
 def test_parser_defaults_to_simple_directory_driven_cli(tmp_path):
     parser = watervapour.build_parser()
 

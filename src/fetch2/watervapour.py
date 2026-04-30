@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover
     cdsapi = None
 
 
-UUID_NAMESPACE = uuid.UUID("48682821-4061-4635-83aa-6a6ee8e10ceb")
+UUID_NAMESPACE = uuid.UUID("36cf936e-58ce-4e35-8f1f-de11d9389fad")
 PRODUCT_HREF = "https://collections.dea.ga.gov.au/product/ga_c_tcwv_1"
 PROVIDER_URL = (
     "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels"
@@ -304,15 +304,17 @@ def convert_tcwv_zips_to_h5(
     return metadata_docs, metadata_records
 
 
-def metadata_uuid(
-    checksum: int | str, ref_time: str, band_index: int, output_name: str
-) -> uuid.UUID:
+def metadata_source_filename(layer_name: str) -> str:
+    year = layer_name.split("/", maxsplit=1)[0]
+    return f"pr_wtr.eatm.{year}"
+
+
+def metadata_uuid(checksum: int | str, layer_name: str) -> uuid.UUID:
     uri = urllib.parse.urlencode(
         {
             "checksum": checksum,
-            "band_index": band_index,
-            "ref_time": ref_time,
-            "filename": output_name,
+            "layer_name": layer_name,
+            "filename": metadata_source_filename(layer_name),
         }
     )
     return uuid.uuid5(UUID_NAMESPACE, f"{PROVIDER_URL}?{uri}")
@@ -335,7 +337,7 @@ def dataset_geometry(transform, height: int, width: int) -> dict:
     }
 
 
-def build_metadata_docs(output_name: str, metadata_records: list[dict]) -> list[dict]:
+def build_metadata_docs(_output_name: str, metadata_records: list[dict]) -> list[dict]:
     docs = []
     creation_dt = dt.datetime.now(dt.timezone.utc).isoformat()
     for record in metadata_records:
@@ -344,9 +346,7 @@ def build_metadata_docs(output_name: str, metadata_records: list[dict]) -> list[
                 "id": str(
                     metadata_uuid(
                         record["checksum"],
-                        record["ref_time"],
-                        record["band_index"],
-                        output_name,
+                        record["layer_name"],
                     )
                 ),
                 "product": {"href": PRODUCT_HREF},

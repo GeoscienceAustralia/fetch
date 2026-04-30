@@ -40,7 +40,7 @@ except ImportError:  # pragma: no cover
 
 
 UUID_NAMESPACE = uuid.UUID("48682821-4061-4635-83aa-6a6ee8e10ceb")
-PRODUCT_HREF = "https://collections.dea.ga.gov.au/ga_c_c_prwtrfallback_1"
+PRODUCT_HREF = "https://collections.dea.ga.gov.au/product/ga_c_tcwv_1"
 PROVIDER_URL = (
     "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels"
 )
@@ -48,6 +48,7 @@ SOURCE_DATASET = "reanalysis-era5-single-levels"
 SOURCE_VARIABLE = "total_column_water_vapour"
 DEFAULT_BOUNDS = [0, 100, -60, 170]  # north, west, south, east
 DEFAULT_HOURS = ["00", "06", "12", "18"]
+DEFAULT_OUTPUT_DIR = "output/ecmwf-tcwv"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -651,7 +652,7 @@ def add_common_options(parser: argparse.ArgumentParser):
     parser.add_argument(
         "water_vapour_dir",
         nargs="?",
-        default="output/ecmwf-tcwv",
+        default=DEFAULT_OUTPUT_DIR,
         help="Directory containing annual water vapour symlinks and year-based version folders.",
     )
     parser.add_argument(

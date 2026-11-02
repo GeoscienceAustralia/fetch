@@ -8,6 +8,6 @@ mock
 # Test dependencies
 pep8
 # Freeze pylint/astroid to minimise unrelated Travis breakages.
-pylint==1.7.2
+pylint==4.0.9
 pytest>4.1.0
 pytest-cov>2.6

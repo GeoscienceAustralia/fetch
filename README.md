@@ -13,8 +13,10 @@ to manage multiple products and collections.
 ## Supported Products
 
 - **MODIS**: MCD43A1.061 - Terra/Aqua combined BRDF data
-- **VIIRS-M**: VNP43MA1.002 - VIIRS moderate resolution BRDF data (750m)
-- **VIIRS-I**: VNP43IA1.002 - VIIRS imaging resolution BRDF data (375m + pan)
+- **VIIRS-M (Suomi-NPP)**: VNP43MA1.002 - VIIRS moderate resolution BRDF data (750m)
+- **VIIRS-I (Suomi-NPP)**: VNP43IA1.002 - VIIRS imaging resolution BRDF data (375m + pan)
+- **VIIRS-M (NOAA-20 / NOAA-21)**: VJ143MA1.002 / VJ243MA1.002 (`viirs_vj1_m` / `viirs_vj2_m`)
+- **VIIRS-I (NOAA-20 / NOAA-21)**: VJ143IA1.002 / VJ243IA1.002 (`viirs_vj1_i` / `viirs_vj2_i`)
 
 ## Prerequisites
 
@@ -179,6 +181,10 @@ The downloader uses NASA's CMR (Common Metadata Repository) API to discover and 
   - MODIS MCD43A1.061: `C2343116130-LPCLOUD`
   - VIIRS VNP43MA1.002: `C2545314596-LPCLOUD`
   - VIIRS VNP43IA1.002: `C2545314578-LPCLOUD`
+  - VIIRS VJ143MA1.002: `C2545310930-LPCLOUD`
+  - VIIRS VJ143IA1.002: `C2545310914-LPCLOUD`
+  - VIIRS VJ243MA1.002: `C2843636138-LPCLOUD`
+  - VIIRS VJ243IA1.002: `C2843631269-LPCLOUD`
 
 ## Configuration File Locations
 

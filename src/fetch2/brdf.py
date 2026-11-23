@@ -62,7 +62,7 @@ print("  gid:", st.st_gid, "group:", grp.getgrgid(st.st_gid).gr_name)
 # We convert them into one .h5 file.
 #
 _BRDF_FILENAME_PATTERN = re.compile(
-    r"(MCD43A1|VNP43IA1|VNP43MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.[0-9]{3}\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z5]+)?$"
+    r"(MCD43A1|VNP43IA1|VNP43MA1|VJ143IA1|VJ143MA1|VJ243IA1|VJ243MA1)\.A(?P<acquisition_date>[0-9]{7})\.(?P<tile_number>h[0-9]{2}v[0-9]{2})\.[0-9]{3}\.(?P<timestamp>[0-9]{13})(?P<extension>[.a-z5]+)?$"
 )
 # Folder pattern YYYY.MM.DD
 _DATE_FOLDER_PATTERN = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}")
@@ -76,6 +76,22 @@ _KNOWN_PRODUCTS = {
     "viirs_i": {
         "concept_id": "C2545314578-LPCLOUD",
         "output_path": "BRDF/VNP43IA1.002",
+    },
+    "viirs_vj1_m": {
+        "concept_id": "C2545310930-LPCLOUD",
+        "output_path": "BRDF/VJ143MA1.002",
+    },
+    "viirs_vj1_i": {
+        "concept_id": "C2545310914-LPCLOUD",
+        "output_path": "BRDF/VJ143IA1.002",
+    },
+    "viirs_vj2_m": {
+        "concept_id": "C2843636138-LPCLOUD",
+        "output_path": "BRDF/VJ243MA1.002",
+    },
+    "viirs_vj2_i": {
+        "concept_id": "C2843631269-LPCLOUD",
+        "output_path": "BRDF/VJ243IA1.002",
     },
 }
 # Tiles are (h, v) coordinates, as seen in the filename
@@ -393,7 +409,7 @@ def generate_example_config() -> str:
 #
 # Tile sets: "mainland", "offshore", "mainland+offshore"
 #
-# Products: modis, viirs_m, viirs_i
+# Products: modis, viirs_m, viirs_i, viirs_vj1_m, viirs_vj1_i, viirs_vj2_m, viirs_vj2_i
 #
 """
 
